@@ -1,2 +1,2 @@
-# VRM21_CPU_RISC-V-Series
+# VRM21-CPU-RISC-V-Series
 Under Construction
