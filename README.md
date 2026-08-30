@@ -31,7 +31,7 @@ Future versions of the series are planned to include **RV64IMFD** and additional
 | RV32I Firmware                   | Available                       |
 | Simulation Testbench             | Available                       |
 | Vivado Simulation Verification   | Available                       |
-| FPGA Verification                | In progress / project dependent |
+| RV32I FPGA Verification          | Verified                        |
 | RV64IMFD                         | Planned / Not Yet FPGA Verified |
 
 > **Note:** The current repository structure intentionally separates each CPU architecture under its own `rv32i/` directory. This allows future architectures such as `rv64imfd/` to be added without restructuring the repository.
@@ -739,6 +739,31 @@ The intended structure is:
 ```
 
 when the RV64IMFD implementation becomes sufficiently mature.
+
+---
+
+## FPGA Verification
+
+### RV32I
+The RV32I CPU implementation has been verified on FPGA hardware.
+
+The FPGA verification covers the core CPU pipeline and its associated system-level components, including:
+
+- RV32I instruction execution
+- ALU operations
+- Load/store operations with byte-enable support
+- Pipeline hazard handling and forwarding
+- Branch and jump handling
+- WFI and interrupt wake-up behavior
+- Machine-mode interrupt handling and MRET
+- Hardware timer
+- Interrupt arbiter
+- Memory-mapped I/O integration
+
+### RV64IMFD
+The RV64IMFD implementation is currently under development and has **not yet been FPGA-verified**.
+
+Its RTL is maintained separately within the CPU Series architecture and will be verified on FPGA in a subsequent development stage.
 
 ---
 
