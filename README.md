@@ -568,6 +568,34 @@ The memory image is intended for use by Verilog/Vivado simulation environments.
 
 ---
 
+### Current RV64IMFD Status
+
+| Verification Stage | Status |
+|---|---|
+| Core-level simulation stress test | **Passed** |
+| Integer ALU | **Passed** |
+| MDU | **Passed** |
+| Memory path | **Passed** |
+| Branch path | **Passed** |
+| Basic CPU/FPU integration | **Passed** |
+| Exhaustive ISA verification | **Pending** |
+| Formal verification | **Pending** |
+| CPU + FPU FPGA validation | **Pending** |
+
+The simulation result should be interpreted as functional evidence for the tested instruction paths, not as a claim of complete RV64IMFD architectural compliance.
+
+---
+
+## FPU
+
+The project also contains a standalone RV64 floating-point unit supporting the floating-point datapath used by the RV64IMFD processor.
+
+The standalone FPU has been validated on FPGA independently.
+
+This provides hardware-level validation of the FPU itself, while CPU-level FPGA integration remains a separate pending verification stage.
+
+---
+
 # VRM Synthesizer Series
 
 The RV64 memory map and firmware environment intentionally contain an early placeholder for the future **VRM Synthesizer Series**.
