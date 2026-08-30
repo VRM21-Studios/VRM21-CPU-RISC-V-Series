@@ -724,7 +724,7 @@ module vrm_cpu_rv64_core (
             mem_wb_reg_we   <= ex_mem_reg_we;
             mem_wb_freg_we  <= ex_mem_freg_we; 
             mem_wb_mem_re   <= ex_mem_mem_re;
-            mem_wb_is_wfi   <= mem_wb_is_wfi;
+            mem_wb_is_wfi   <= ex_mem_is_wfi;
             mem_wb_fpu_to_gpr <= ex_mem_fpu_to_gpr; 
         end
     end
