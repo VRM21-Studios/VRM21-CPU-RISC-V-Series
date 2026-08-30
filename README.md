@@ -894,7 +894,8 @@ The repository structure is intentionally prepared for the next CPU architecture
 
 # License
 
-See the repository license file for the applicable licensing terms.
+Licensed under the MIT License.
+Provided as-is, without warranty.
 
 ---
 
