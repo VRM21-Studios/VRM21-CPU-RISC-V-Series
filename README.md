@@ -4,126 +4,146 @@ A collection of custom RISC-V processor cores and supporting hardware developed 
 
 This repository focuses on the development of custom RISC-V CPU cores, their surrounding system components, verification environments, firmware support, and SoC-level integration.
 
-The current implementation provides an **RV32I CPU core and a minimal RV32I-based SoC subsystem**, including interrupt handling, a hardware timer, an interrupt arbiter, memory-mapped peripherals, and GCC-based firmware support.
+The repository currently contains an **RV32I CPU subsystem** and an **RV64IMFD CPU subsystem**, together with supporting interrupt, timer, memory-mapped I/O, firmware, and verification infrastructure.
 
-Future versions of the series are planned to include **RV64IMFD** and additional processor-related components.
+The RV64IMFD implementation extends the series toward a 64-bit processor architecture with integer multiplication/division and hardware floating-point support through the **F** and **D** extensions.
 
 ---
 
 ## Repository Status
 
-| Component                        | Status                          |
-| -------------------------------- | ------------------------------- |
-| RV32I CPU Core                   | Available                       |
-| RV32I Pipeline                   | Available                       |
-| RV32I ALU                        | Available                       |
-| Load/Store Unit                  | Available                       |
-| Byte Enable Support              | Available                       |
-| Load/Store Hazard Handling       | Available                       |
-| Data Forwarding                  | Available                       |
-| Branch / Jump Handling           | Available                       |
-| WFI Support                      | Available                       |
-| Machine Return (`MRET`)          | Available                       |
-| Basic Machine Interrupt Handling | Available                       |
-| Hardware Timer                   | Available                       |
-| Interrupt Arbiter                | Available                       |
-| Memory-Mapped SoC Wrapper        | Available                       |
-| RV32I Firmware                   | Available                       |
-| Simulation Testbench             | Available                       |
-| Vivado Simulation Verification   | Available                       |
-| RV32I FPGA Verification          | Verified                        |
-| FPGA Application Demo            | Not Publicly Released           |
-| RV64IMFD                         | Planned / Not Yet FPGA Verified |
+| Component                        | Status                        |
+| -------------------------------- | ----------------------------- |
+| RV32I CPU Core                   | Available                     |
+| RV32I Pipeline                   | Available                     |
+| RV32I ALU                        | Available                     |
+| RV32I Load/Store Unit            | Available                     |
+| RV32I Byte Enable Support        | Available                     |
+| RV32I Hazard Handling            | Available                     |
+| RV32I Data Forwarding            | Available                     |
+| RV32I Branch / Jump Handling     | Available                     |
+| RV32I WFI Support                | Available                     |
+| RV32I MRET Support               | Available                     |
+| RV32I Interrupt Handling         | Available                     |
+| RV32I Hardware Timer             | Available                     |
+| RV32I Interrupt Arbiter          | Available                     |
+| RV32I SoC Wrapper                | Available                     |
+| RV32I Firmware                   | Available                     |
+| RV32I Simulation Verification    | Available                     |
+| RV32I FPGA Verification          | Verified                      |
+| RV64IMFD CPU Core                | Available / Development Stage |
+| RV64IMFD Pipeline                | Available / Development Stage |
+| RV64I Integer ISA                | Available / Development Stage |
+| RV64 M Extension                 | Available / Development Stage |
+| RV64 F Extension                 | Available / Development Stage |
+| RV64 D Extension                 | Available / Development Stage |
+| RV64 MDU                         | Available / Development Stage |
+| RV64 FPU                         | Available / Development Stage |
+| RV64 Interrupt System            | Available / Development Stage |
+| RV64 Hardware Timer              | Available / Development Stage |
+| RV64 Interrupt Arbiter           | Available / Development Stage |
+| RV64 SoC Wrapper                 | Available / Development Stage |
+| RV64IMFD Firmware                | Available / Development Stage |
+| RV64IMFD Simulation Verification | In Progress                   |
+| RV64IMFD FPGA Verification       | Not Yet Verified              |
+| VRM Synthesizer Series           | Under Development             |
 
 > **FPGA Verification Note:** The RV32I implementation has been verified on FPGA as part of a system-level hardware integration. The specific application-level design used during FPGA validation is not included in this repository because its associated research work is currently unpublished.
 
-> **Note:** The current repository structure intentionally separates each CPU architecture under its own `rv32i/` directory. This allows future architectures such as `rv64imfd/` to be added without restructuring the repository.
+> **RV64IMFD Verification Note:** The RV64IMFD implementation is currently in the development and simulation-verification stage. FPGA validation has not yet been completed.
+
+> **Synthesizer Development Note:** The memory map and firmware environment currently contain a reserved/example region for the planned VRM Synthesizer Series. The oscillator-related interface is currently used only as a placeholder for future SoC integration and firmware testbench development. The synthesizer/oscillator implementation is not considered a completed or FPGA-validated component.
 
 ---
 
 # Architecture Overview
 
-The current CPU subsystem is organized around the following hierarchy:
+The repository is organized by CPU architecture:
 
 ```text
 VRM21-CPU-RISC-V-Series
 │
 ├── rtl/
-│   └── rv32i/
-│       ├── vrm_cpu_rv32i_core.v
-│       ├── vrm_cpu_rv32i_wrapper.v
-│       ├── vrm_irq_arbiter.v
-│       ├── vrm_timer.v
+│   ├── rv32i/
+│   │   ├── vrm_cpu_rv32i_core.v
+│   │   ├── vrm_cpu_rv32i_wrapper.v
+│   │   ├── vrm_irq_arbiter.v
+│   │   ├── vrm_timer.v
+│   │   └── ...
+│   │
+│   └── rv64imfd/
+│       ├── vrm_cpu_rv64_core.v
+│       ├── vrm_cpu_rv64_wrapper.v
+│       ├── vrm_cpu_timer_64.v
+│       ├── vrm_cpu_irq_arbiter_64.v
+│       ├── ...
 │       └── ...
 │
 ├── tb/
-│   └── rv32i/
-│       ├── tb_vrm_cpu_rv32i_core.v
-│       ├── tb_vrm_cpu_wrapper.v
+│   ├── rv32i/
+│   │   ├── tb_vrm_cpu_rv32i_core.sv
+│   │   ├── tb_vrm_cpu_wrapper.sv
+│   │   └── ...
+│   │
+│   └── rv64imfd/
+│       ├── ...
 │       └── ...
 │
 ├── include/
-│   └── rv32i/
-│       └── vrm_soc_map_rv32i.vh
+│   ├── rv32i/
+│   │   └── vrm_soc_map_rv32i.vh
+│   │
+│   └── rv64imfd/
+│       └── vrm_soc_map_rv64.vh
 │
 ├── gcc-firmware/
-│   └── rv32i/
+│   ├── rv32i/
+│   │   ├── boot.S
+│   │   ├── main.c
+│   │   ├── soc_map.h
+│   │   ├── link.ld
+│   │   └── build.sh
+│   │
+│   └── rv64imfd/
 │       ├── boot.S
 │       ├── main.c
 │       ├── soc_map.h
 │       ├── link.ld
-│       └── build.sh
+│       └── compiler.md
 │
 ├── docs/
-│   └── rv32i/
-│       ├── ...
-│       └── 06_tb_result.md
-│
-├── .github/
-│   └── workflows/
-│       └── rv32i/
-│           └── ...
+│   ├── rv32i/
+│   │   └── ...
+│   │
+│   └── rv64imfd/
+│       ├── README.md
+│       ├── architecture.md
+│       ├── pipeline.md
+│       ├── isa_support.md
+│       ├── mdu.md
+│       ├── fpu.md
+│       ├── memory_system.md
+│       ├── interrupt_system.md
+│       ├── firmware.md
+│       ├── verification.md
+│       └── limitations.md
 │
 └── README.md
 ```
 
 The architecture-specific directory layout is intentional.
 
-Each supported CPU architecture has its own implementation, verification environment, memory map, firmware, documentation, and CI configuration.
+Each supported CPU architecture has its own implementation, verification environment, memory map, firmware, and documentation.
 
-For example, the planned structure will allow:
-
-```text
-rtl/
-├── rv32i/
-└── rv64imfd/
-
-tb/
-├── rv32i/
-└── rv64imfd/
-
-include/
-├── rv32i/
-└── rv64imfd/
-
-gcc-firmware/
-├── rv32i/
-└── rv64imfd/
-
-docs/
-├── rv32i/
-└── rv64imfd/
-```
-
-This prevents architecture-specific files from becoming mixed together as the CPU series grows.
+This allows new architectures to be introduced without mixing architecture-specific RTL and verification infrastructure.
 
 ---
 
 # RV32I CPU
 
-The current processor implementation is based on the **RISC-V RV32I base integer instruction set**.
+The RV32I processor is the first CPU implementation in the series and provides a 32-bit RISC-V integer processing subsystem.
 
-The CPU uses a pipelined architecture with dedicated stages for:
+The CPU uses a pipelined architecture with:
 
 ```text
 IF → ID → EX → MEM → WB
@@ -137,13 +157,11 @@ where:
 * **MEM** — Memory Access
 * **WB** — Writeback
 
-The implementation includes hardware mechanisms for handling common pipeline dependencies and control-flow changes.
+The implementation includes data forwarding, load-use hazard detection, branch and jump handling, interrupt support, and memory-mapped system peripherals.
 
 ---
 
-## Supported Instruction Groups
-
-The current RV32I implementation covers the following instruction groups:
+## RV32I Supported Instruction Groups
 
 ### U-Type
 
@@ -205,109 +223,207 @@ The current RV32I implementation covers the following instruction groups:
 
 ### System Instructions
 
-The current implementation also provides support for:
-
 * `WFI`
 * `MRET`
 
-Interrupt handling is implemented as a lightweight custom machine-level mechanism around these instructions.
+---
+
+# RV64IMFD CPU
+
+The RV64IMFD implementation is the second major processor architecture in the series.
+
+It extends the integer RV32I concept toward a 64-bit architecture and adds hardware support for:
+
+```text
+RV64I
+ ├── M — Integer Multiplication and Division
+ ├── F — Single-Precision Floating Point
+ └── D — Double-Precision Floating Point
+```
+
+The implementation is organized as a separate architecture rather than as a modification of the RV32I source tree.
+
+The RV64IMFD subsystem includes:
+
+* 64-bit integer datapath
+* 64-bit program counter
+* RV64 integer execution
+* Multiply/divide unit
+* Floating-point unit
+* 64-bit memory interface
+* Byte write strobes
+* Memory-mapped timer
+* Interrupt arbiter
+* External interrupt synchronization
+* SoC-level address decoding
+* Bare-metal GCC firmware support
+
+Detailed documentation is available under:
+
+```text
+docs/rv64imfd/
+```
 
 ---
 
-# Pipeline and Hazard Handling
+# RV64IMFD Pipeline
 
-The CPU contains both **data forwarding** and **load-use hazard detection**.
+The RV64IMFD processor follows the same general pipelined philosophy as the RV32I implementation while extending the datapath and execution resources for 64-bit operation and floating-point instructions.
 
-## Data Forwarding
-
-Results from later pipeline stages can be forwarded directly into the execute stage.
-
-The forwarding paths include:
+The general pipeline organization is:
 
 ```text
-EX/MEM → EX
-MEM/WB → EX
+IF → ID → EX → MEM → WB
 ```
 
-This reduces unnecessary pipeline stalls for normal ALU dependencies.
+The architecture separates integer, memory, multiply/divide, and floating-point operations through their respective execution resources.
 
-For example:
+Detailed pipeline behavior is documented in:
 
 ```text
-ADD  x3, x1, x2
-SUB  x4, x3, x1
+docs/rv64imfd/pipeline.md
 ```
-
-The second instruction can obtain the newly generated `x3` through forwarding rather than waiting for the register file writeback.
 
 ---
 
-## Load-Use Hazard
+# RV64 M Extension and MDU
 
-A load instruction has an additional dependency because its data becomes available later in the pipeline.
+The RV64 implementation includes a dedicated **Multiply/Divide Unit (MDU)** for the RISC-V `M` extension.
 
-The CPU therefore detects a condition such as:
+The M extension provides integer multiplication and division operations for the 64-bit architecture.
+
+The MDU is responsible for operations including:
+
+* `MUL`
+* `MULH`
+* `MULHSU`
+* `MULHU`
+* `DIV`
+* `DIVU`
+* `REM`
+* `REMU`
+
+The MDU implementation and its architectural behavior are documented separately in:
 
 ```text
-LW   x14, 0(x13)
-ADDI x15, x14, 1
+docs/rv64imfd/mdu.md
 ```
-
-and inserts a pipeline stall when the following instruction immediately consumes the loaded register.
-
-This prevents the consumer instruction from operating on stale data.
 
 ---
 
-# Branch and Jump Handling
+# RV64 F and D Extensions
 
-Branches and jumps are resolved in the execute stage.
+The RV64IMFD architecture includes hardware floating-point support through the VRM21 FPU subsystem.
 
-When a control-flow instruction is taken:
-
-```text
-branch_taken_ex
-```
-
-causes the program counter to switch to the calculated target address.
-
-The corresponding younger instruction in the pipeline is invalidated through:
+The architecture supports:
 
 ```text
-flush_ex
+F → IEEE-754 single-precision operations
+D → IEEE-754 double-precision operations
 ```
 
-This prevents instructions fetched from the wrong sequential path from being committed.
+The FPU is integrated into the RV64 processor architecture rather than being treated as an external software-only floating-point implementation.
 
-The implementation supports:
+The FPU documentation covers:
 
-* Conditional branches
-* `JAL`
-* `JALR`
-* `MRET`
+* Supported floating-point operations
+* Datapath organization
+* Register interaction
+* Integer/floating-point conversion
+* F and D extension behavior
+* FPU integration
+* Verification methodology
+
+Detailed documentation is available in:
+
+```text
+docs/rv64imfd/fpu.md
+```
+
+The standalone FPU hardware has also been validated independently on FPGA. The complete RV64IMFD CPU integration, however, has not yet undergone FPGA validation.
+
+---
+
+# RV64 Memory System
+
+The RV64 system uses a 64-bit memory interface:
+
+```text
+Address   : 64-bit
+Write Data: 64-bit
+Read Data : 64-bit
+Write Strobe: 8-bit
+```
+
+The byte write strobe allows individual byte lanes to be controlled during store operations.
+
+The external memory interface therefore provides:
+
+```text
+ext_mem_addr
+ext_mem_wdata
+ext_mem_wstrb
+ext_mem_we
+ext_mem_rdata
+ext_mem_busy
+```
+
+Local system peripherals are decoded inside the CPU wrapper, while external memory and future accelerators are accessed through the external memory interface.
+
+Detailed information is documented in:
+
+```text
+docs/rv64imfd/memory_system.md
+```
+
+---
+
+# RV64 Memory Map
+
+The current RV64 system defines the following architectural regions:
+
+| Address Range               | Region | Description                               |
+| --------------------------- | ------ | ----------------------------------------- |
+| `0x0000_0000 - 0x0000_00FF` | Tier 0 | Hardware Timer                            |
+| `0x0000_1000 - 0x0000_10FF` | Tier 0 | Interrupt Arbiter                         |
+| `0x0000_4000 - 0x0000_7FFF` | Tier 1 | Main Data Memory                          |
+| `0x4000_0000 - 0x4000_0FFF` | Tier 2 | Reserved Synthesizer / Accelerator Region |
+
+The Tier 2 region is intentionally reserved for future application accelerators.
+
+In particular:
+
+```text
+0x0000_0000_4000_0000
+```
+
+is currently allocated as an example base address for the planned VRM Synthesizer Series.
+
+This does **not** indicate that the oscillator implementation is currently a completed subsystem.
 
 ---
 
 # Interrupt Architecture
 
-The RV32I subsystem provides a lightweight interrupt architecture consisting of:
+The RV64 system extends the interrupt architecture used by the RV32I subsystem.
+
+The architecture contains:
 
 ```text
-Interrupt Sources
-       │
-       ▼
-┌──────────────────┐
-│ Interrupt Arbiter│
-└────────┬─────────┘
-         │
-         ▼
-       CPU IRQ
-         │
-         ▼
-      ISR Vector
-         │
-         ▼
-       MRET
+External IRQ Sources
+        │
+        ▼
+2-Stage Synchronizer
+        │
+        ▼
+Interrupt Arbiter
+        │
+        ├── Timer IRQ
+        │
+        └── External IRQs
+        │
+        ▼
+     CPU IRQ
 ```
 
 The interrupt arbiter maintains:
@@ -315,299 +431,132 @@ The interrupt arbiter maintains:
 * Pending interrupt state
 * Interrupt enable mask
 * Rising-edge detection
-* Write-one-to-clear functionality
+* Interrupt clearing
+* Combined CPU interrupt trigger
 
-The current system reserves:
+The current source allocation is:
 
 ```text
-Bit 0      → Hardware Timer
-Bit 1-31   → External / Future Interrupt Sources
+IRQ bit 0      → Hardware Timer
+IRQ bits 1-31  → External interrupt sources
 ```
 
-This provides a simple mechanism for expanding the interrupt architecture without changing the CPU core interface.
+External interrupt inputs are synchronized through a two-stage flip-flop structure before entering the interrupt arbiter.
+
+Detailed behavior is documented in:
+
+```text
+docs/rv64imfd/interrupt_system.md
+```
 
 ---
 
-# Hardware Timer
+# RV64 Hardware Timer
 
-The SoC wrapper contains a memory-mapped hardware timer.
+The RV64 subsystem includes a dedicated 64-bit bus-accessible timer peripheral.
+
+The timer currently maintains 32-bit internal control and counter registers while exposing a 64-bit MMIO interface.
+
+The register set includes:
+
+```text
+0x00 → Control
+0x04 → Compare
+0x08 → Counter
+0x0C → Status
+```
 
 The timer provides:
 
 * Enable control
-* Auto-reload mode
-* Compare value
-* Counter register
-* Interrupt pending status
-* Interrupt enable
-* Write-one-to-clear status handling
+* Compare operation
+* Counter operation
+* Optional auto-reload
+* Interrupt status
+* Interrupt generation
 
-The timer is connected to the interrupt arbiter as:
-
-```text
-Timer
-  │
-  ▼
-IRQ Source Bit 0
-  │
-  ▼
-Interrupt Arbiter
-  │
-  ▼
-CPU
-```
-
-The timer therefore provides a basic hardware-driven interrupt source for software and system-level verification.
+The timer interrupt is connected to interrupt source bit 0.
 
 ---
 
-# Memory-Mapped System
+# RV64 SoC Wrapper
 
-The current RV32I system uses the following memory map:
+The RV64 CPU wrapper integrates the processor core with local system peripherals and external memory.
 
-|          Address |     Size | Peripheral                       |
-| ---------------: | -------: | -------------------------------- |
-|    `0x0000_0000` | `0x1000` | RAM                              |
-|    `0x0000_1000` | `0x0100` | Hardware Timer                   |
-|    `0x0000_2000` | `0x0100` | Interrupt Arbiter                |
-| Higher addresses |        — | Reserved for future accelerators |
+The general architecture is:
 
-The architecture is intentionally designed around a **system-first memory map**, allowing future DSP, accelerator, and peripheral blocks to be mapped above the system-core region.
+```text
+                       ┌─────────────────────┐
+                       │   RV64IMFD Core     │
+                       └──────────┬──────────┘
+                                  │
+                           64-bit CPU Bus
+                                  │
+              ┌───────────────────┼───────────────────┐
+              │                   │                   │
+              ▼                   ▼                   ▼
+        External Memory       Timer            IRQ Arbiter
+                                  │                   │
+                                  └─────────┬─────────┘
+                                            │
+                                            ▼
+                                           IRQ
+```
+
+Local address decoding is performed by the wrapper.
+
+This allows the CPU core to remain separated from the system-level routing of internal peripherals.
 
 ---
 
-# RV32I SoC Wrapper
+# RV64 Firmware
 
-The CPU core itself is kept relatively independent from the surrounding SoC infrastructure.
+A bare-metal GCC firmware environment is provided for RV64IMFD.
 
-The wrapper integrates:
-
-```text
-                   ┌─────────────────────┐
-                   │   RV32I CPU Core    │
-                   └──────────┬──────────┘
-                              │
-                       CPU Data Bus
-                              │
-              ┌───────────────┼───────────────┐
-              │               │               │
-              ▼               ▼               ▼
-        External RAM       Timer       IRQ Arbiter
-                              │               │
-                              └───────┬───────┘
-                                      │
-                                      ▼
-                                     IRQ
-```
-
-The wrapper performs local address decoding and routes accesses either to:
-
-* External memory
-* Hardware timer
-* Interrupt arbiter
-
-This keeps peripheral-specific address decoding outside the CPU core.
-
----
-
-# Byte-Enable Support
-
-The RV32I CPU provides four byte-enable signals:
-
-```text
-mem_be[3:0]
-```
-
-These signals allow byte- and halfword-level stores while maintaining a 32-bit data interface.
-
-For example:
-
-```text
-SB
-```
-
-activates one byte lane, while:
-
-```text
-SH
-```
-
-activates two adjacent byte lanes.
-
-`SW` activates all four lanes.
-
-This mechanism is useful for:
-
-* BRAM interfaces
-* MMIO registers
-* Memory systems
-* Future SoC interconnects
-
----
-
-# Load Data Extraction
-
-For load operations, the CPU uses the address offset to select the appropriate byte or halfword from the returned 32-bit memory word.
-
-The implementation supports:
-
-```text
-LB
-LH
-LW
-LBU
-LHU
-```
-
-with both sign extension and zero extension as required by the RV32I specification.
-
----
-
-# WFI and CPU Halt
-
-The CPU implements a lightweight `WFI` mechanism.
-
-When `WFI` reaches the appropriate pipeline stage, the CPU asserts:
-
-```text
-cpu_halt
-```
-
-The CPU then waits for an interrupt.
-
-When an interrupt arrives:
-
-```text
-IRQ
- │
- ▼
-Wake CPU
- │
- ▼
-Jump to interrupt vector
- │
- ▼
-Execute ISR
- │
- ▼
-MRET
- │
- ▼
-Resume execution
-```
-
-This functionality is verified in both the standalone CPU testbench and the SoC wrapper integration testbench.
-
----
-
-# Firmware Support
-
-The repository includes a small bare-metal firmware environment for RV32I.
-
-The firmware is designed for:
-
-* CPU bring-up
-* SoC integration testing
-* MMIO verification
-* Interrupt testing
-* Simulation
-* Future FPGA bring-up
-
-The firmware is built using the RISC-V GNU toolchain.
-
-The current firmware structure is:
+The firmware environment contains:
 
 ```text
 gcc-firmware/
-└── rv32i/
+└── rv64imfd/
     ├── boot.S
     ├── main.c
     ├── soc_map.h
     ├── link.ld
-    └── build.sh
+    └── compiler.md
 ```
+
+The firmware is intended primarily for:
+
+* CPU bring-up
+* Instruction execution testing
+* MMIO verification
+* Interrupt testing
+* FPU/MDU integration testing
+* Simulation
+* Future FPGA bring-up
+
+The current firmware also contains example mappings for the planned synthesizer subsystem.
+
+These synthesizer accesses are currently intended as **testbench placeholders** and should not be interpreted as evidence of a completed or FPGA-validated oscillator implementation.
 
 ---
 
-# Boot Flow
+# RV64 Firmware Build
 
-The RV32I firmware starts from the reset vector:
-
-```text
-0x00000000
-```
-
-The interrupt vector is located at:
+The RV64 firmware is compiled using the RISC-V GNU toolchain with:
 
 ```text
-0x00000004
+-march=rv64imfd
+-mabi=lp64d
 ```
 
-The general flow is:
+The firmware build process is documented in:
 
 ```text
-Reset
-  │
-  ▼
-_start
-  │
-  ├── Reset handler
-  │
-  └── main()
-        │
-        ├── Peripheral initialization
-        ├── Timer configuration
-        ├── IRQ configuration
-        └── Test / application code
+gcc-firmware/rv64imfd/compiler.md
 ```
 
-The linker script places the firmware into the 4 KB RAM region currently defined for the RV32I system.
-
----
-
-# Firmware Build
-
-The firmware can be built using the RISC-V GNU toolchain.
-
-From the RV32I firmware directory:
-
-```bash
-./build.sh
-```
-
-or manually:
-
-```bash
-riscv64-unknown-elf-gcc \
-    -march=rv32i \
-    -mabi=ilp32 \
-    -O2 \
-    -ffreestanding \
-    -fno-builtin \
-    -nostdlib \
-    -T link.ld \
-    boot.S main.c \
-    -o firmware.elf
-```
-
-The generated ELF image can then be converted into a Verilog memory image:
-
-```bash
-riscv64-unknown-elf-objcopy \
-    -O verilog \
-    firmware.elf \
-    firmware.mem
-```
-
-A disassembly file can also be generated:
-
-```bash
-riscv64-unknown-elf-objdump \
-    -D firmware.elf \
-    > firmware.dump
-```
-
-The resulting files are:
+The build produces:
 
 ```text
 firmware.elf
@@ -615,123 +564,146 @@ firmware.mem
 firmware.dump
 ```
 
-`firmware.mem` is intended for loading into a Verilog/Vivado memory model, while `firmware.dump` is useful for instruction-level debugging.
+The memory image is intended for use by Verilog/Vivado simulation environments.
+
+---
+
+# VRM Synthesizer Series
+
+The RV64 memory map and firmware environment intentionally contain an early placeholder for the future **VRM Synthesizer Series**.
+
+The planned series is expected to include hardware such as:
+
+* Digital oscillators
+* Wavetable-based waveform generation
+* Sub-oscillator modes
+* LFO functionality
+* Noise generation
+* Glide / portamento control
+* Additional synthesizer-oriented DSP components
+
+The current repository only establishes the **SoC-level address-space and firmware interface concept**.
+
+The oscillator implementation itself remains under development.
+
+The synthesizer series has **not yet been independently validated on FPGA**, and the current RV64 firmware references to the oscillator region are therefore intended for simulation/testbench use only.
+
+Future synthesizer components will be introduced as their individual implementations become sufficiently mature and independently verified.
 
 ---
 
 # Verification
 
-The RV32I implementation includes dedicated simulation testbenches.
-
-The verification environment is divided into:
+Verification is organized according to CPU architecture.
 
 ```text
 tb/
-└── rv32i/
+├── rv32i/
+└── rv64imfd/
 ```
 
-Two major verification levels are currently provided.
+The RV32I verification environment covers the CPU core and SoC-level integration.
 
-## CPU Core Verification
+The RV64IMFD verification environment is being developed to cover:
 
-The standalone CPU testbench verifies:
+* RV64 integer execution
+* Pipeline behavior
+* Load/store operations
+* Byte write strobes
+* Branch and jump handling
+* MDU operations
+* FPU operations
+* Interrupt handling
+* Timer operation
+* MMIO accesses
+* Firmware execution
+* CPU/peripheral integration
 
-* ALU operations
-* Immediate operations
-* Register operations
-* LUI / AUIPC behavior
-* Load / store operations
-* Byte enables
-* Byte and halfword extraction
-* Load-use hazards
-* Data forwarding
-* Branch flushing
-* `WFI`
-* Interrupt wake-up
-* `MRET`
+The RV64IMFD testbench is intended to combine processor-level verification with dedicated FPU verification and MDU testing.
 
-## SoC Wrapper Verification
+Detailed verification status is documented in:
 
-The wrapper-level testbench verifies integration between:
-
-* RV32I CPU
-* External memory
-* Hardware timer
-* Interrupt arbiter
-* MMIO address decoder
-* Interrupt service routine
-
-The testbench also verifies that the CPU can:
-
-1. Configure the timer.
-2. Enable the timer interrupt.
-3. Enter `WFI`.
-4. Receive the timer interrupt.
-5. Enter the interrupt service routine.
-6. Clear the interrupt sources.
-7. Return through `MRET`.
-8. Resume normal execution.
+```text
+docs/rv64imfd/verification.md
+```
 
 ---
 
-# Testbench Results
+# FPGA Verification
 
-Detailed expected simulation output and verification results are documented under:
+## RV32I
 
-```text
-docs/rv32i/
-```
+The RV32I CPU implementation has been verified on FPGA hardware.
 
-The testbench documentation is intended to provide a reproducible reference for the expected Vivado simulator console output.
+The FPGA validation covers system-level operation including:
 
-A successful simulation should report passing results for the tested CPU and SoC integration features.
+* RV32I instruction execution
+* ALU operations
+* Load/store operations
+* Byte-enable support
+* Pipeline hazard handling
+* Data forwarding
+* Branch and jump handling
+* WFI behavior
+* Interrupt wake-up
+* Machine-level interrupt handling
+* MRET
+* Hardware timer
+* Interrupt arbiter
+* Memory-mapped I/O
+
+The application-level FPGA design used for validation is not included because its associated research work remains unpublished.
+
+## RV64IMFD
+
+The RV64IMFD CPU is currently **not FPGA-verified**.
+
+Although individual components such as the FPU have undergone independent hardware validation, this should not be interpreted as validation of the complete RV64IMFD CPU subsystem.
+
+The complete RV64IMFD integration still requires:
+
+1. CPU-level simulation verification
+2. SoC-level simulation verification
+3. Firmware-based verification
+4. FPGA synthesis
+5. FPGA hardware validation
 
 ---
 
 # Documentation
 
-Architecture-specific documentation is stored separately from the RTL source.
-
-Current documentation follows the same architecture hierarchy:
+Architecture-specific documentation is maintained under:
 
 ```text
 docs/
-└── rv32i/
-    ├── ...
-    └── 06_tb_result.md
+├── rv32i/
+└── rv64imfd/
 ```
 
-The documentation covers areas such as:
+The RV64IMFD documentation currently includes:
 
-* CPU architecture
-* Pipeline organization
-* Instruction support
-* Memory interface
-* Interrupt architecture
-* Timer
-* SoC integration
-* Firmware
-* Verification
-* Testbench results
+```text
+docs/rv64imfd/
+├── README.md
+├── architecture.md
+├── pipeline.md
+├── isa_support.md
+├── mdu.md
+├── fpu.md
+├── memory_system.md
+├── interrupt_system.md
+├── firmware.md
+├── verification.md
+└── limitations.md
+```
 
-Additional documentation will be added as the CPU series develops.
+The documentation is intended to describe the architecture independently from the RTL implementation.
 
 ---
 
-# GitHub Actions / CI
+# CI / Automation
 
-Continuous integration configuration is also separated by CPU architecture.
-
-Current structure:
-
-```text
-.github/
-└── workflows/
-    └── rv32i/
-        └── ...
-```
-
-This allows future architectures to introduce independent verification workflows without coupling them to the RV32I implementation.
+The repository is designed so that verification workflows can be maintained independently for each CPU architecture.
 
 The intended structure is:
 
@@ -741,103 +713,33 @@ The intended structure is:
 └── rv64imfd/
 ```
 
-when the RV64IMFD implementation becomes sufficiently mature.
-
----
-
-## FPGA Verification
-
-### RV32I
-The RV32I CPU implementation has been verified on FPGA hardware.
-
-The FPGA verification covers the core CPU pipeline and its associated system-level components, including:
-
-- RV32I instruction execution
-- ALU operations
-- Load/store operations with byte-enable support
-- Pipeline hazard handling and forwarding
-- Branch and jump handling
-- WFI and interrupt wake-up behavior
-- Machine-mode interrupt handling and MRET
-- Hardware timer
-- Interrupt arbiter
-- Memory-mapped I/O integration
-
-### RV64IMFD
-The RV64IMFD implementation is currently under development and has **not yet been FPGA-verified**.
-
-Its RTL is maintained separately within the CPU Series architecture and will be verified on FPGA in a subsequent development stage.
-
----
-
-# Future RV64IMFD Series
-
-The next major CPU target is:
-
-```text
-RV64IMFD
-```
-
-covering:
-
-* RV64I
-* M — Integer Multiplication and Division
-* F — Single-Precision Floating Point
-* D — Double-Precision Floating Point
-
-The planned architecture will be introduced under separate architecture-specific directories rather than modifying the RV32I directory structure.
-
-For example:
-
-```text
-rtl/
-├── rv32i/
-└── rv64imfd/
-
-tb/
-├── rv32i/
-└── rv64imfd/
-
-include/
-├── rv32i/
-└── rv64imfd/
-
-gcc-firmware/
-├── rv32i/
-└── rv64imfd/
-
-docs/
-├── rv32i/
-└── rv64imfd/
-```
-
-The RV64IMFD implementation should be considered **development-stage hardware** until its verification and FPGA validation are completed.
+This prevents architecture-specific verification requirements from becoming tightly coupled.
 
 ---
 
 # Design Philosophy
 
-The CPU series follows several design principles:
+The CPU series follows several design principles.
 
 ### Modular
 
-CPU, peripherals, memory interfaces, firmware, and verification environments are separated into reusable components.
+CPU cores, peripherals, memory interfaces, firmware, and verification environments are maintained as separate components.
 
-### Parameterized Where Appropriate
+### Architecture-Oriented
 
-Hardware components are designed with reuse and future integration in mind.
+Each CPU architecture has its own RTL, testbench, memory map, firmware, and documentation.
 
 ### Synthesis-Oriented
 
-RTL is written with FPGA synthesis and practical hardware implementation in mind.
+RTL is developed with practical FPGA synthesis and hardware implementation in mind.
 
 ### Verification-Driven
 
-New functionality is accompanied by simulation-level verification before being considered mature.
+New functionality is progressively verified through simulation before hardware validation.
 
 ### System-Oriented
 
-The CPU is developed as part of a larger SoC architecture rather than as an isolated processor core.
+The processors are developed as part of a larger SoC architecture rather than as isolated CPU cores.
 
 ### Expandable
 
@@ -849,7 +751,8 @@ The architecture is intended to support future integration with:
 * Memory controllers
 * Application-specific accelerators
 * Additional interrupt sources
-* Additional RISC-V CPU variants
+* Additional RISC-V processor variants
+* Synthesizer and audio-generation hardware
 
 ---
 
@@ -857,7 +760,7 @@ The architecture is intended to support future integration with:
 
 This repository is part of the broader **VRM21 RTL development ecosystem**.
 
-The CPU series is intended to serve as a processing/control element for future hardware systems, including systems that integrate custom DSP and accelerator modules.
+The CPU series provides a programmable control and processing layer for future systems integrating custom hardware accelerators and DSP components.
 
 The surrounding VRM21 RTL ecosystem includes reusable hardware blocks such as:
 
@@ -868,33 +771,62 @@ The surrounding VRM21 RTL ecosystem includes reusable hardware blocks such as:
 * Arithmetic components
 * Processing accelerators
 * Utility RTL
+* Floating-point processing components
 
-The CPU series provides a programmable control layer that can eventually coordinate these hardware components through a memory-mapped SoC architecture.
+The RV64IMFD architecture is intended to provide a higher-capability programmable platform for integrating these components through a memory-mapped SoC architecture.
 
 ---
 
 # Current Development Scope
 
-The current focus is the RV32I implementation.
+The current development scope covers two processor architectures:
 
-Development priorities are currently centered around:
+### RV32I
 
-1. RV32I CPU correctness
+The RV32I implementation is the mature baseline of the series and has completed FPGA validation.
+
+### RV64IMFD
+
+The RV64IMFD implementation is the current next-generation architecture under active development.
+
+Current priorities are:
+
+1. RV64IMFD instruction correctness
 2. Pipeline verification
-3. Interrupt and timer integration
-4. Firmware-based system testing
-5. SoC-level verification
-6. FPGA validation
-7. Documentation
-8. Preparation for the RV64IMFD branch of the series
+3. MDU verification
+4. FPU integration verification
+5. Interrupt and timer verification
+6. Firmware-based testing
+7. SoC-level verification
+8. FPGA validation
+9. Documentation refinement
 
-The repository structure is intentionally prepared for the next CPU architecture without requiring a major reorganization.
+The planned VRM Synthesizer Series remains a separate development track and is currently represented only through reserved address-space and firmware placeholders.
+
+---
+
+# Future Development
+
+Future versions of the series may introduce:
+
+* Additional RISC-V extensions
+* More advanced interrupt architecture
+* Additional memory interfaces
+* DSP coprocessors
+* Audio accelerators
+* NPU integration
+* Custom SoC interconnects
+* VRM Synthesizer hardware
+* Additional FPGA validation platforms
+
+The architecture-specific repository structure is intended to accommodate these developments without requiring major restructuring.
 
 ---
 
 # License
 
 Licensed under the MIT License.
+
 Provided as-is, without warranty.
 
 ---
@@ -903,6 +835,6 @@ Provided as-is, without warranty.
 
 **VRM21 Studios**
 
-VRM21 CPU RISC-V Series
+**VRM21 CPU RISC-V Series**
 
 This repository is part of the ongoing VRM21 hardware and RTL development projects.
