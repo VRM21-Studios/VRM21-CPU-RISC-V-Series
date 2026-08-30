@@ -1,213 +1,196 @@
 # RV64IMFD Limitations
 
-## 1. Overview
+This document describes the current limitations and verification boundaries of the `vrm_cpu_rv64_core`.
 
-The RV64IMFD processor is an active hardware-development project.
-
-The RTL should therefore be considered an evolving implementation rather than a finalized commercial processor core.
-
-This document records important limitations and areas that require additional verification.
+The core has successfully passed a representative simulation stress test, but the current implementation should not yet be considered a fully compliant RV64IMFD processor.
 
 ---
 
-## 2. ISA Compliance
+## 1. ISA Verification Scope
 
-The processor targets RV64IMFD but complete RISC-V architectural compliance has not yet been formally established.
+The current testbench exercises a selected subset of the implemented instruction paths.
 
-Passing selected instruction tests is not sufficient to claim complete compliance.
-
----
-
-## 3. Privileged Architecture
-
-The current implementation contains selected machine-level functionality such as:
+Passing the current stress test does not prove complete compliance with:
 
 ```text
-MRET
+RV64I
+RV64M
+RV64F
+RV64D
+```
+
+A dedicated instruction-by-instruction compliance test suite is still required.
+
+---
+
+## 2. Floating-Point Verification
+
+The integrated FPU path has been successfully exercised in simulation using:
+
+```text
+FLD
+FADD.D
+FMUL.D
+```
+
+The test produced the expected IEEE-754 results for the selected operands.
+
+However, this does not constitute complete verification of the F and D extensions.
+
+Additional verification is required for:
+
+* All arithmetic operations
+* Comparisons
+* Conversions
+* Move instructions
+* Classification
+* Square root
+* Division
+* NaN handling
+* Infinity handling
+* Signed zero
+* Subnormal values
+* Rounding modes
+* Floating-point exception behavior
+* Complete instruction encoding coverage
+
+---
+
+## 3. FPGA Validation
+
+The standalone FPU implementation has been validated independently on FPGA.
+
+However, the **RV64IMFD CPU core with the integrated FPU has not yet undergone full FPGA validation**.
+
+Therefore, the following should currently be considered unverified at FPGA level:
+
+```text
+CPU pipeline
+      +
+MDU integration
+      +
+FPU integration
+      +
+Memory interface
+      +
+Interrupt/control logic
+```
+
+FPGA validation is planned as a separate verification stage.
+
+---
+
+## 4. Privileged Architecture
+
+The core contains basic support for:
+
+```text
 WFI
-interrupt entry
-```
-
-However, it does not currently represent a complete implementation of the RISC-V privileged architecture.
-
-In particular, the current implementation uses a simplified interrupt mechanism rather than a complete CSR-based machine-mode environment.
-
----
-
-## 4. Floating-Point Compliance
-
-The FPU subsystem is integrated but complete IEEE-754 and RISC-V floating-point compliance is still subject to verification.
-
-Areas requiring particular attention include:
-
-- Rounding modes
-- Exceptional values
-- NaN behavior
-- Signaling NaNs
-- Infinities
-- Subnormal values
-- Conversion corner cases
-- Floating-point flags
-
----
-
-## 5. Pipeline Verification
-
-The pipeline combines several independent stall sources:
-
-```text
-Load-Use
-MDU
-FPU
-Memory
-```
-
-and several flush sources:
-
-```text
-Branch
-Jump
 MRET
-Interrupt
+Interrupt entry
+mepc
 ```
 
-Interactions between these conditions require extensive verification.
+The implementation is not intended to claim complete RISC-V privileged architecture compliance.
+
+In particular, a complete CSR subsystem and comprehensive trap/exception architecture are outside the current verification scope.
 
 ---
 
-## 6. Memory System
+## 5. Memory System
 
-The current memory interface is intentionally simple.
+The CPU exposes a simple data-memory interface rather than a complete cache/MMU subsystem.
 
-It provides:
+The current design does not provide:
 
-```text
-64-bit data bus
-8-bit write strobe
-memory busy signal
-```
+* Instruction cache
+* Data cache
+* MMU
+* TLB
+* Virtual memory
+* Full atomic memory subsystem
+* Bus protocol compliance beyond the exposed custom interface
 
-It does not itself implement a complete cache hierarchy or memory-coherency system.
-
----
-
-## 7. External Memory Protocol
-
-The external memory interface can be connected to a larger memory subsystem, but the CPU core itself does not define a complete external bus protocol such as AXI.
-
-Protocol conversion is expected to be handled by surrounding SoC logic.
+The behavioral simulation memory is also considerably simpler than a real external memory subsystem.
 
 ---
 
-## 8. Interrupt Architecture
+## 6. Memory Alignment
 
-The current interrupt system is lightweight and tailored to the current SoC architecture.
+The load/store datapath contains byte-enable generation and load extraction logic for the currently supported access sizes.
 
-It does not currently claim support for all features of a complete RISC-V interrupt controller architecture.
+However, exhaustive verification of:
 
----
+* Misaligned loads
+* Misaligned stores
+* Cross-boundary accesses
+* Memory exceptions
 
-## 9. Debug Features
-
-The current core exposes limited debug visibility.
-
-The primary architectural debug output is:
-
-```text
-debug_reg_x1
-```
-
-This should not be interpreted as a complete hardware debug interface.
+has not yet been completed.
 
 ---
 
-## 10. Performance
+## 7. Hazard and Pipeline Verification
 
-The current implementation prioritizes modularity and functional development over maximum performance.
+The design contains load-use hazard detection and forwarding paths for integer and floating-point registers.
 
-In particular:
+The current stress test demonstrates successful execution of selected dependent instruction sequences.
 
-- Division is iterative.
-- FPU operations may require multiple cycles.
-- Pipeline stalls are used around multi-cycle execution units.
-- No cache hierarchy is currently integrated into the core.
-- Branch prediction is not implemented.
+Nevertheless, exhaustive pipeline verification has not yet been performed for every possible dependency combination.
 
-These characteristics affect throughput and latency.
+Potential future verification should include:
 
----
-
-## 11. FPGA Validation
-
-RTL implementation and simulation results should not be interpreted as FPGA validation.
-
-Hardware validation must separately confirm:
-
-- Synthesis
-- Timing closure
-- Resource mapping
-- DSP utilization
-- Memory inference
-- Reset behavior
-- Multi-cycle execution
-- Firmware execution
+* ALU-to-ALU dependencies
+* Load-to-use dependencies
+* MDU-to-ALU dependencies
+* FPU-to-FPU dependencies
+* FPU-to-GPR dependencies
+* GPR-to-FPU dependencies
+* Memory stalls combined with dependencies
+* Branches following long-latency operations
+* Interrupts during stalled operations
 
 ---
 
-## 12. Firmware Environment
+## 8. Interrupt Handling
 
-The current GCC firmware environment is a bare-metal development environment.
+Interrupt handling is intentionally lightweight.
 
-It does not provide:
+The current implementation uses a simple `irq` input and internal ISR state.
 
-- Operating system support
-- Standard runtime environment
-- Dynamic memory management
-- Full libc environment
-- Process isolation
+It should not yet be considered a complete machine-mode interrupt implementation.
 
-The firmware is primarily intended for simulation and hardware bring-up.
+Additional work is required for comprehensive interrupt and exception behavior.
 
 ---
 
-## 13. Future Expansion
+## 9. Formal Verification
 
-Several address ranges and architectural interfaces are intentionally reserved for future VRM21-Studios accelerators and peripherals.
+No formal verification result is currently claimed.
 
-Reserved address space should not be interpreted as evidence that the corresponding hardware is currently implemented or validated.
+The current evidence is based on directed simulation and stress-test execution.
 
----
-
-## 14. Development Status
-
-The RV64IMFD core should currently be considered:
-
-```text
-Experimental / Development
-```
-
-rather than:
-
-```text
-Production-ready
-```
-
-The architecture, RTL, firmware interface, and verification environment may change as development progresses.
+Formal property checking may be added in a future verification stage.
 
 ---
 
-## 15. Summary
+## 10. Compliance Status
 
-The major current limitations are:
+The current status can be summarized as:
 
-- Full ISA compliance not yet formally established
-- Privileged architecture is partial
-- Floating-point compliance requires further verification
-- Pipeline corner cases require continued testing
-- External memory protocol is intentionally simple
-- No cache hierarchy
-- No branch prediction
-- Limited debug infrastructure
-- FPGA validation remains separate from RTL verification
+| Area                               | Status                      |
+| ---------------------------------- | --------------------------- |
+| Core-level simulation              | **Passed for tested paths** |
+| ALU                                | **Passed in stress test**   |
+| MDU                                | **Passed in stress test**   |
+| Memory path                        | **Passed in stress test**   |
+| Branch path                        | **Passed in stress test**   |
+| Basic FPU integration              | **Passed in stress test**   |
+| Full ISA compliance                | **Not yet established**     |
+| Privileged architecture compliance | **Not yet established**     |
+| Formal verification                | **Not yet performed**       |
+| CPU + FPU FPGA validation          | **Not yet performed**       |
 
-These limitations are expected to decrease as the project progresses through verification and hardware validation.
+The appropriate overall description is therefore:
+
+> **Functionally demonstrated through core-level simulation, with exhaustive ISA verification and FPGA CPU integration validation still pending.**
