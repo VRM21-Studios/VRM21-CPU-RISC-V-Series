@@ -1,0 +1,5 @@
+# Mengabaikan semua file dan folder tanpa terkecuali
+*
+
+# (Opsional) Mengecualikan file .gitignore ini sendiri jika Anda ingin agar aturannya tersimpan
+!.gitignore
