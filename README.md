@@ -32,7 +32,10 @@ Future versions of the series are planned to include **RV64IMFD** and additional
 | Simulation Testbench             | Available                       |
 | Vivado Simulation Verification   | Available                       |
 | RV32I FPGA Verification          | Verified                        |
+| FPGA Application Demo            | Not Publicly Released           |
 | RV64IMFD                         | Planned / Not Yet FPGA Verified |
+
+> **FPGA Verification Note:** The RV32I implementation has been verified on FPGA as part of a system-level hardware integration. The specific application-level design used during FPGA validation is not included in this repository because its associated research work is currently unpublished.
 
 > **Note:** The current repository structure intentionally separates each CPU architecture under its own `rv32i/` directory. This allows future architectures such as `rv64imfd/` to be added without restructuring the repository.
 
