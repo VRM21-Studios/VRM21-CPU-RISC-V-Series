@@ -253,7 +253,8 @@ module vrm_cpu_rv64_core (
                 5'b00010: id_fpu_op = 4'd2; // FMUL
                 5'b00011: id_fpu_op = 4'd3; // FDIV
                 5'b01011: id_fpu_op = 4'd4; // FSQRT
-                5'b01000: id_fpu_op = 4'd6; // FCVT
+                5'b11010: id_fpu_op = 4'd6; // FCVT.D.W (GPR to FPR)
+                5'b11000: id_fpu_op = 4'd6; // FCVT.W.D (FPR to GPR)
                 5'b11100: id_fpu_op = 4'd7; // FMV/FCLASS
                 5'b11101: id_fpu_op = 4'd8; // MATH
                 default:  id_fpu_op = 4'd0;
