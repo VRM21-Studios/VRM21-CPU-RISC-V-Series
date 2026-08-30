@@ -9,13 +9,13 @@ The RV64IMFD implementation uses the separately maintained **VRM21 FPU Series** 
 The complete FPU implementation is maintained in a dedicated repository:
 
 **VRM21-FPU-Series**
-[VRM21-Studios/VRM21-FPU-Series](https://github.com/VRM21-Studios/VRM21-FPU-Series)
+[VRM21-Studios/VRM21-FPU-Series](https://github.com/VRM21-Studios/VRM21-FPU-Module-FPGA)
 
 ### RTL Implementation
 
 The synthesizable RTL implementation of the FPU functional units is available here:
 
-[VRM21-FPU-Series/rtl](https://github.com/VRM21-Studios/VRM21-FPU-Series/tree/main/rtl)
+[VRM21-FPU-Series/rtl](https://github.com/VRM21-Studios/VRM21-FPU-Module-FPGA/tree/main/rtl)
 
 This directory contains the individual floating-point execution units and supporting RTL used by the FPU.
 
@@ -23,7 +23,7 @@ This directory contains the individual floating-point execution units and suppor
 
 The FPU constants, definitions, and related include files are maintained here:
 
-[VRM21-FPU-Series/include](https://github.com/VRM21-Studios/VRM21-FPU-Series/tree/main/include)
+[VRM21-FPU-Series/include](https://github.com/VRM21-Studios/VRM21-FPU-Module-FPGA/tree/main/include)
 
 These files provide the definitions required by the FPU RTL integration.
 
