@@ -729,22 +729,6 @@ The documentation is intended to describe the architecture independently from th
 
 ---
 
-# CI / Automation
-
-The repository is designed so that verification workflows can be maintained independently for each CPU architecture.
-
-The intended structure is:
-
-```text
-.github/workflows/
-├── rv32i/
-└── rv64imfd/
-```
-
-This prevents architecture-specific verification requirements from becoming tightly coupled.
-
----
-
 # Design Philosophy
 
 The CPU series follows several design principles.
