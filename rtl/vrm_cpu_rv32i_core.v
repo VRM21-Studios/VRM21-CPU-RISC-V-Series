@@ -1,65 +1,49 @@
 `timescale 1ns / 1ps
 
 // ============================================================================
-// Module      : vrm_cpu_rv32i_core
-// Description : Pipelined 32-bit RISC-V processor core with RV32I-oriented
-//               instruction decode, data forwarding, load-use hazard handling,
-//               interrupt support, and WFI-based halt behavior.
+// MODULE: vrm_cpu_rv32i_core
+// DESCRIPTION:
+// Parameterized RV32I processor core with a simple five-stage pipeline.
 //
-// Pipeline:
-//   IF  -> Instruction Fetch
-//   ID  -> Instruction Decode and Register Read
-//   EX  -> Execute and Data Forwarding
-//   MEM -> Memory Access
-//   WB  -> Writeback
+// Pipeline stages:
+// - IF  : Instruction Fetch
+// - ID  : Instruction Decode and Register Read
+// - EX  : Execute, Branch Evaluation, and Address Generation
+// - MEM : Memory Access
+// - WB  : Writeback
 //
-// Main Features:
-// - 32-bit program counter and datapath
-// - 32 general-purpose 32-bit registers
-// - Register x0 hardwired to zero through read-path logic
-// - Five-stage pipelined datapath
+// Features:
+// - RV32I base integer instruction set
+// - Five-stage pipelined architecture
 // - Load-use hazard detection
-// - EX/MEM and MEM/WB data forwarding
-// - Conditional branch support
-// - JAL and JALR support
-// - LUI and AUIPC support
-// - Load and store memory interface
+// - EX-stage data forwarding
+// - WB-to-ID register bypass
+// - Branch and jump handling
+// - JAL / JALR support
+// - LUI / AUIPC support
+// - Byte-enable generation for memory stores
+// - Byte and halfword load extraction with sign/zero extension
+// - Basic machine-mode interrupt handling
 // - MRET support
-// - WFI-based processor halt behavior
-// - Simple interrupt vector handling
-// - Debug access to register x1
-//
-// Instruction Decode:
-// - Register-immediate arithmetic and logical operations
-// - Register-register arithmetic and logical operations
-// - Branch instructions
-// - Jumps
-// - Loads and stores
-// - Upper-immediate instructions
-// - System instructions used by the control flow logic
+// - WFI support
+// - Hardwired x0 register
+// - Debug output for register x1
 //
 // Interrupt Behavior:
-// - A rising/high-level interrupt request is accepted when the processor is
-//   not already inside an interrupt service routine.
+// - A detected interrupt redirects execution to address 0x00000004.
 // - The current PC is stored in MEPC.
-// - Execution is redirected to the fixed interrupt vector address 0x00000004.
-// - MRET restores execution to the stored MEPC value.
-//
-// Halt / WFI Behavior:
-// - The CPU enters the halted state when a WFI instruction reaches the
-//   corresponding pipeline stage.
-// - An accepted interrupt releases the halt condition and resumes execution.
+// - Nested interrupts are prevented while inside the ISR.
+// - MRET restores execution from MEPC.
 //
 // Memory Interface:
-// - Instruction memory is accessed through pc_out and instr_in.
-// - Data memory is accessed through mem_addr, mem_wdata, mem_we, and mem_rdata.
-// - Data memory reads are assumed to be returned through the pipeline without
-//   an explicit ready/valid handshake.
+// - Instruction memory uses a simple address/data interface.
+// - Data memory provides byte-enable signals for SB, SH, and SW.
+// - Loads are assumed to return a 32-bit memory word.
 //
-// Note:
-// This module is an RTL implementation intended for FPGA-oriented development.
-// Architectural compliance and complete ISA coverage depend on the currently
-// implemented instruction decoder, ALU operations, and system-control logic.
+// Notes:
+// - This core implements a compact RV32I-oriented pipeline and does not expose
+//   a full standard RISC-V CSR interface.
+// - Interrupt vectoring and machine-state handling are implemented internally.
 // ============================================================================
 
 module vrm_cpu_rv32i_core (
@@ -68,39 +52,24 @@ module vrm_cpu_rv32i_core (
     input  wire        irq,
 
     // =========================================================================
-    // INSTRUCTION MEMORY INTERFACE
+    // Instruction Memory Interface
     // =========================================================================
-
-    // Current program counter presented to instruction memory.
     output wire [31:0] pc_out,
-
-    // Instruction word returned by instruction memory.
     input  wire [31:0] instr_in,
 
     // =========================================================================
-    // DATA MEMORY INTERFACE
+    // Data Memory Interface
     // =========================================================================
-
-    // Calculated data memory address.
     output wire [31:0] mem_addr,
-
-    // Data written to memory during a store operation.
     output wire [31:0] mem_wdata,
-
-    // Asserted during a store operation.
+    output wire [3:0]  mem_be,
     output wire        mem_we,
-
-    // Data returned by the memory subsystem during a load operation.
     input  wire [31:0] mem_rdata,
 
     // =========================================================================
-    // DEBUG AND STATUS OUTPUTS
+    // Debug and Status
     // =========================================================================
-
-    // Debug view of general-purpose register x1.
     output wire [31:0] debug_reg_x1,
-
-    // Processor halt indication, primarily associated with WFI behavior.
     output wire        cpu_halt
 );
 
@@ -108,107 +77,62 @@ module vrm_cpu_rv32i_core (
     // 0. GLOBAL SIGNALS AND HAZARD CONTROL
     // =========================================================================
 
-    // Program counter register.
     reg [31:0] pc;
-
     assign pc_out = pc;
 
-    // -------------------------------------------------------------------------
-    // Pipeline control signals
-    // -------------------------------------------------------------------------
-
-    // Asserted when the IF and ID stages must be stalled to resolve a
-    // load-use data hazard.
+    // Pipeline control signals.
+    // stall   : Holds the front-end pipeline during a load-use hazard.
+    // flush_ex: Flushes younger instructions after a taken branch/jump or MRET.
     wire stall;
-
-    // Asserted when younger instructions must be removed from the pipeline
-    // due to a taken branch, jump, or MRET operation.
     wire flush_ex;
 
     // -------------------------------------------------------------------------
-    // Interrupt and exception-related state
+    // Interrupt / Exception State
     // -------------------------------------------------------------------------
 
-    // Indicates that the processor is currently handling an interrupt.
-    reg in_isr;
-
-    // Machine exception program counter storage.
+    reg        in_isr;
     reg [31:0] mepc;
 
-    // Accept an interrupt only when the processor is not already inside an ISR.
+    // Accept an interrupt only when the processor is not already in an ISR.
     wire irq_trigger = (irq === 1'b1) && !in_isr;
 
     // =========================================================================
     // 1. INSTRUCTION FETCH (IF)
     // =========================================================================
 
-    // -------------------------------------------------------------------------
-    // IF/ID Pipeline Register
-    // -------------------------------------------------------------------------
-
-    // Program counter associated with the fetched instruction.
     reg [31:0] if_id_pc;
-
-    // Fetched instruction passed to the decode stage.
     reg [31:0] if_id_instr;
 
-    // -------------------------------------------------------------------------
-    // Execute-stage control results
-    // -------------------------------------------------------------------------
-
-    // Indicates that a branch or jump is taken.
-    wire branch_taken_ex;
-
-    // Target program counter generated by the execute stage.
+    // Branch, jump, and return control generated by the EX stage.
+    wire        branch_taken_ex;
     wire [31:0] target_pc_ex;
-
-    // Indicates that an MRET instruction is currently executing.
-    wire is_mret_ex;
+    wire        is_mret_ex;
 
     // -------------------------------------------------------------------------
     // Program Counter Update
     // -------------------------------------------------------------------------
-    // PC update priority:
-    // 1. Interrupt entry
-    // 2. MRET return
-    // 3. Normal execution while the CPU is not halted
-    // 4. Taken branch or jump
-    // 5. Sequential PC increment
-    // 6. Hold PC during a load-use stall
+
     always @(posedge clk) begin
         if (!rstn) begin
             pc     <= 32'h0;
-            in_isr <= 0;
-            mepc   <= 0;
+            in_isr <= 1'b0;
+            mepc   <= 32'h0;
         end else begin
-
-            // ---------------------------------------------------------------
-            // Interrupt entry
-            // ---------------------------------------------------------------
-            // Redirect execution to the fixed interrupt vector.
             if (irq_trigger) begin
-                pc <= 32'h00000004;
-
-                // Preserve the current PC in MEPC.
-                mepc <= (cpu_halt) ? pc : pc;
-
-                in_isr <= 1;
-
-            // ---------------------------------------------------------------
-            // Return from interrupt
-            // ---------------------------------------------------------------
+                // Redirect execution to the internal interrupt vector.
+                pc     <= 32'h00000004;
+                mepc   <= pc;
+                in_isr <= 1'b1;
             end else if (is_mret_ex) begin
+                // Restore execution from the saved interrupt PC.
                 pc     <= mepc;
-                in_isr <= 0;
-
-            // ---------------------------------------------------------------
-            // Normal instruction flow
-            // ---------------------------------------------------------------
+                in_isr <= 1'b0;
             end else if (!cpu_halt) begin
-
                 if (branch_taken_ex) begin
+                    // Redirect execution after a taken branch or jump.
                     pc <= target_pc_ex;
                 end else if (!stall) begin
+                    // Normal sequential instruction fetch.
                     pc <= pc + 4;
                 end
             end
@@ -216,21 +140,14 @@ module vrm_cpu_rv32i_core (
     end
 
     // -------------------------------------------------------------------------
-    // IF/ID Pipeline Register Update
+    // IF/ID Pipeline Register
     // -------------------------------------------------------------------------
-    // The fetch/decode boundary is cleared when:
-    // - Reset is asserted
-    // - A branch or jump is taken
-    // - An interrupt is accepted
-    // - An MRET is executed
-    //
-    // A RISC-V NOP instruction is inserted during pipeline flush.
-    always @(posedge clk) begin
 
+    always @(posedge clk) begin
         if (!rstn || flush_ex || irq_trigger || is_mret_ex) begin
+            // Insert NOP when the instruction in the front-end must be flushed.
             if_id_instr <= 32'h00000013;
             if_id_pc    <= 32'h0;
-
         end else if (!stall && !cpu_halt) begin
             if_id_instr <= instr_in;
             if_id_pc    <= pc;
@@ -241,10 +158,6 @@ module vrm_cpu_rv32i_core (
     // 2. INSTRUCTION DECODE (ID) AND REGISTER READ
     // =========================================================================
 
-    // -------------------------------------------------------------------------
-    // Instruction Fields
-    // -------------------------------------------------------------------------
-
     wire [6:0] id_opcode = if_id_instr[6:0];
     wire [4:0] id_rd     = if_id_instr[11:7];
     wire [2:0] id_funct3 = if_id_instr[14:12];
@@ -253,20 +166,17 @@ module vrm_cpu_rv32i_core (
     wire [6:0] id_funct7 = if_id_instr[31:25];
 
     // -------------------------------------------------------------------------
-    // Immediate Generation
+    // Immediate Extraction
     // -------------------------------------------------------------------------
 
-    // I-type immediate.
     wire [31:0] id_imm_i =
         {{20{if_id_instr[31]}}, if_id_instr[31:20]};
 
-    // S-type immediate.
     wire [31:0] id_imm_s =
         {{20{if_id_instr[31]}},
          if_id_instr[31:25],
          if_id_instr[11:7]};
 
-    // B-type branch immediate.
     wire [31:0] id_imm_b =
         {{19{if_id_instr[31]}},
          if_id_instr[31],
@@ -275,11 +185,9 @@ module vrm_cpu_rv32i_core (
          if_id_instr[11:8],
          1'b0};
 
-    // U-type immediate.
     wire [31:0] id_imm_u =
         {if_id_instr[31:12], 12'h0};
 
-    // J-type jump immediate.
     wire [31:0] id_imm_j =
         {{11{if_id_instr[31]}},
          if_id_instr[31],
@@ -292,25 +200,25 @@ module vrm_cpu_rv32i_core (
     // Register File
     // -------------------------------------------------------------------------
 
-    // 32 general-purpose registers, each 32 bits wide.
     reg [31:0] reg_file [0:31];
 
     integer i;
 
-    // Initialize register file contents for deterministic simulation startup.
-    initial begin
+    initial
         for (i = 0; i < 32; i = i + 1)
             reg_file[i] = 0;
-    end
 
     // -------------------------------------------------------------------------
-    // Register Read and Writeback Forwarding
+    // Writeback Signals for WB-to-ID Bypass
     // -------------------------------------------------------------------------
-    // Register x0 is always returned as zero.
-    //
-    // When a register value is simultaneously being written back from the
-    // MEM/WB stage, the writeback value is forwarded directly to the decode
-    // stage to avoid using stale register-file contents.
+
+    wire [31:0] wb_data;
+
+    reg [4:0] mem_wb_rd;
+    reg       mem_wb_reg_we;
+
+    // Register reads include a bypass from the WB stage.
+    // Register x0 is always read as zero.
     wire [31:0] rf_read1 =
         (id_rs1 == 0) ? 32'b0 :
         (mem_wb_reg_we && mem_wb_rd == id_rs1) ? wb_data :
@@ -321,9 +229,9 @@ module vrm_cpu_rv32i_core (
         (mem_wb_reg_we && mem_wb_rd == id_rs2) ? wb_data :
         reg_file[id_rs2];
 
-    // -------------------------------------------------------------------------
-    // Control Decoder
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // CONTROL DECODER
+    // =========================================================================
 
     reg [3:0] id_alu_ctrl;
 
@@ -337,102 +245,122 @@ module vrm_cpu_rv32i_core (
     reg id_is_auipc;
     reg id_is_lui;
 
-    // Detect MRET.
-    wire id_is_mret =
-        (id_opcode == 7'h73 && if_id_instr == 32'h30200073);
-
-    // Detect WFI-related system instructions.
-    wire id_is_wfi =
-        (id_opcode == 7'h73 &&
-        (if_id_instr == 32'h10500073 || if_id_instr == 32'h00100073));
+    // Indicates whether the current instruction consumes rs1 and/or rs2.
+    // These signals are used by the load-use hazard detector.
+    reg uses_rs1;
+    reg uses_rs2;
 
     // -------------------------------------------------------------------------
-    // Instruction Decode Logic
+    // System Instructions
+    // -------------------------------------------------------------------------
+
+    wire id_is_mret =
+        (id_opcode == 7'h73) &&
+        (if_id_instr == 32'h30200073);
+
+    wire id_is_wfi =
+        (id_opcode == 7'h73) &&
+        ((if_id_instr == 32'h10500073) ||
+         (if_id_instr == 32'h00100073));
+
+    // -------------------------------------------------------------------------
+    // Instruction Decode
     // -------------------------------------------------------------------------
 
     always @(*) begin
 
         // Default control values.
-        id_reg_we     = 0;
-        id_mem_we     = 0;
-        id_mem_re     = 0;
+        id_reg_we    = 1'b0;
+        id_mem_we    = 1'b0;
+        id_mem_re    = 1'b0;
 
-        id_is_branch  = 0;
-        id_is_jump    = 0;
-        id_is_jalr    = 0;
-        id_is_auipc   = 0;
-        id_is_lui     = 0;
+        id_is_branch = 1'b0;
+        id_is_jump   = 1'b0;
+        id_is_jalr   = 1'b0;
+        id_is_auipc  = 1'b0;
+        id_is_lui    = 1'b0;
 
-        id_alu_ctrl   = 4'b0000;
+        id_alu_ctrl  = 4'b0000;
+
+        uses_rs1     = 1'b0;
+        uses_rs2     = 1'b0;
 
         case (id_opcode)
 
-            // ---------------------------------------------------------------
+            // -----------------------------------------------------------------
             // LUI
-            // ---------------------------------------------------------------
+            // -----------------------------------------------------------------
             7'h37: begin
-                id_is_lui = 1;
-                id_reg_we = 1;
+                id_is_lui = 1'b1;
+                id_reg_we = 1'b1;
             end
 
-            // ---------------------------------------------------------------
+            // -----------------------------------------------------------------
             // AUIPC
-            // ---------------------------------------------------------------
+            // -----------------------------------------------------------------
             7'h17: begin
-                id_is_auipc = 1;
-                id_reg_we   = 1;
+                id_is_auipc = 1'b1;
+                id_reg_we   = 1'b1;
             end
 
-            // ---------------------------------------------------------------
+            // -----------------------------------------------------------------
             // JAL
-            // ---------------------------------------------------------------
+            // -----------------------------------------------------------------
             7'h6F: begin
-                id_is_jump = 1;
-                id_reg_we  = 1;
+                id_is_jump = 1'b1;
+                id_reg_we  = 1'b1;
             end
 
-            // ---------------------------------------------------------------
+            // -----------------------------------------------------------------
             // JALR
-            // ---------------------------------------------------------------
+            // -----------------------------------------------------------------
             7'h67: begin
-                id_is_jump = 1;
-                id_is_jalr = 1;
-                id_reg_we  = 1;
+                id_is_jump = 1'b1;
+                id_is_jalr = 1'b1;
+                id_reg_we  = 1'b1;
+                uses_rs1   = 1'b1;
             end
 
-            // ---------------------------------------------------------------
+            // -----------------------------------------------------------------
             // Conditional Branch
-            // ---------------------------------------------------------------
+            // -----------------------------------------------------------------
             7'h63: begin
-                id_is_branch = 1;
+                id_is_branch = 1'b1;
+                uses_rs1     = 1'b1;
+                uses_rs2     = 1'b1;
             end
 
-            // ---------------------------------------------------------------
+            // -----------------------------------------------------------------
             // Load
-            // ---------------------------------------------------------------
+            // -----------------------------------------------------------------
             7'h03: begin
-                id_mem_re    = 1;
-                id_reg_we    = 1;
-                id_alu_ctrl  = 4'b0000;
+                id_mem_re    = 1'b1;
+                id_reg_we    = 1'b1;
+                uses_rs1     = 1'b1;
+                id_alu_ctrl  = 4'b0000; // ADD
             end
 
-            // ---------------------------------------------------------------
+            // -----------------------------------------------------------------
             // Store
-            // ---------------------------------------------------------------
+            // -----------------------------------------------------------------
             7'h23: begin
-                id_mem_we   = 1;
-                id_alu_ctrl = 4'b0000;
+                id_mem_we    = 1'b1;
+                uses_rs1     = 1'b1;
+                uses_rs2     = 1'b1;
+                id_alu_ctrl  = 4'b0000; // ADD
             end
 
-            // ---------------------------------------------------------------
-            // OP-IMM
-            // ---------------------------------------------------------------
+            // -----------------------------------------------------------------
+            // I-Type ALU
+            // -----------------------------------------------------------------
             7'h13: begin
-                id_reg_we = 1;
+                id_reg_we = 1'b1;
+                uses_rs1  = 1'b1;
 
                 case (id_funct3)
                     3'b000: id_alu_ctrl = 4'b0000; // ADDI
                     3'b010: id_alu_ctrl = 4'b0011; // SLTI
+                    3'b011: id_alu_ctrl = 4'b1010; // SLTIU
                     3'b100: id_alu_ctrl = 4'b0100; // XORI
                     3'b110: id_alu_ctrl = 4'b0110; // ORI
                     3'b111: id_alu_ctrl = 4'b0111; // ANDI
@@ -443,33 +371,25 @@ module vrm_cpu_rv32i_core (
                 endcase
             end
 
-            // ---------------------------------------------------------------
-            // OP
-            // ---------------------------------------------------------------
+            // -----------------------------------------------------------------
+            // R-Type ALU
+            // -----------------------------------------------------------------
             7'h33: begin
-                id_reg_we = 1;
+                id_reg_we = 1'b1;
+                uses_rs1  = 1'b1;
+                uses_rs2  = 1'b1;
 
                 case (id_funct3)
-
-                    3'b000: begin
-                        if (id_funct7 == 7'b0100000)
-                            id_alu_ctrl = 4'b0001; // SUB
-                        else if (id_funct7 == 7'b0000001)
-                            id_alu_ctrl = 4'b1001; // M-extension operation code
-                        else
-                            id_alu_ctrl = 4'b0000; // ADD
-                    end
-
+                    3'b000: id_alu_ctrl =
+                        (id_funct7[5]) ? 4'b0001 : 4'b0000; // SUB / ADD
                     3'b001: id_alu_ctrl = 4'b0010; // SLL
                     3'b010: id_alu_ctrl = 4'b0011; // SLT
+                    3'b011: id_alu_ctrl = 4'b1010; // SLTU
                     3'b100: id_alu_ctrl = 4'b0100; // XOR
-
                     3'b101: id_alu_ctrl =
                         (id_funct7[5]) ? 4'b1000 : 4'b0101; // SRA / SRL
-
                     3'b110: id_alu_ctrl = 4'b0110; // OR
                     3'b111: id_alu_ctrl = 4'b0111; // AND
-
                     default: id_alu_ctrl = 4'b0000;
                 endcase
             end
@@ -477,16 +397,24 @@ module vrm_cpu_rv32i_core (
         endcase
     end
 
-    // -------------------------------------------------------------------------
-    // ALU Operand B Selection
-    // -------------------------------------------------------------------------
-    // Register-register operations and branches use rs2.
-    // Store operations use the S-type immediate.
-    // Other immediate-based operations use the I-type immediate.
+    // Select the second ALU operand according to the instruction format.
     wire [31:0] id_alu_op2 =
         (id_opcode == 7'h33 || id_is_branch) ? rf_read2 :
         (id_opcode == 7'h23) ? id_imm_s :
         id_imm_i;
+
+    // =========================================================================
+    // LOAD-USE HAZARD DETECTION
+    // =========================================================================
+
+    // A one-cycle stall is inserted when the instruction in EX is a load
+    // whose destination register is consumed by the instruction currently
+    // in the ID stage.
+    assign stall =
+        (id_ex_mem_re &&
+         (id_ex_rd != 0) &&
+         ((uses_rs1 && (id_ex_rd == id_rs1)) ||
+          (uses_rs2 && (id_ex_rd == id_rs2))));
 
     // =========================================================================
     // ID/EX PIPELINE REGISTER
@@ -520,25 +448,20 @@ module vrm_cpu_rv32i_core (
     reg id_ex_is_lui;
     reg id_ex_is_mret;
 
-    // -------------------------------------------------------------------------
-    // ID/EX Pipeline Update
-    // -------------------------------------------------------------------------
-    // The ID/EX stage is cleared when a hazard, branch flush, or interrupt
-    // requires the current instruction to be discarded.
     always @(posedge clk) begin
-
         if (!rstn || flush_ex || stall || irq_trigger) begin
 
-            id_ex_reg_we    <= 0;
-            id_ex_mem_we    <= 0;
-            id_ex_mem_re    <= 0;
+            // Convert the current ID/EX entry into a bubble.
+            id_ex_reg_we    <= 1'b0;
+            id_ex_mem_we    <= 1'b0;
+            id_ex_mem_re    <= 1'b0;
 
-            id_ex_is_branch <= 0;
-            id_ex_is_jump   <= 0;
-            id_ex_is_mret   <= 0;
-            id_ex_is_wfi    <= 0;
+            id_ex_is_branch <= 1'b0;
+            id_ex_is_jump   <= 1'b0;
+            id_ex_is_mret   <= 1'b0;
+            id_ex_is_wfi    <= 1'b0;
 
-            id_ex_rd        <= 0;
+            id_ex_rd        <= 5'b0;
 
         end else if (!cpu_halt) begin
 
@@ -572,68 +495,44 @@ module vrm_cpu_rv32i_core (
             id_ex_is_lui    <= id_is_lui;
             id_ex_is_mret   <= id_is_mret;
             id_ex_is_wfi    <= id_is_wfi;
+
         end
     end
-
-    // -------------------------------------------------------------------------
-    // Load-Use Hazard Detection
-    // -------------------------------------------------------------------------
-    // Stall the fetch/decode pipeline when the instruction currently in the
-    // execute stage is a load whose destination register is required by the
-    // instruction currently being decoded.
-    assign stall =
-        (id_ex_mem_re &&
-        (id_ex_rd != 0) &&
-        (id_ex_rd == id_rs1 || id_ex_rd == id_rs2));
 
     // =========================================================================
     // 3. EXECUTE (EX) AND DATA FORWARDING
     // =========================================================================
-
-    // -------------------------------------------------------------------------
-    // EX/MEM Pipeline State
-    // -------------------------------------------------------------------------
 
     reg [31:0] ex_mem_alu_res;
     reg [4:0]  ex_mem_rd;
     reg        ex_mem_reg_we;
 
     // -------------------------------------------------------------------------
-    // MEM/WB Pipeline State
+    // EX-Stage Forwarding
     // -------------------------------------------------------------------------
 
-    reg [31:0] wb_data;
-    reg [4:0]  mem_wb_rd;
-    reg        mem_wb_reg_we;
-
-    // -------------------------------------------------------------------------
-    // Forwarding Selection
-    // -------------------------------------------------------------------------
-    // Forward data from:
-    // - EX/MEM stage when the most recent result is available
-    // - MEM/WB stage when the result is available from writeback
-    // - ID/EX register contents otherwise
+    // Forwarding priority:
+    // 1. EX/MEM result
+    // 2. MEM/WB result
+    // 3. Original ID/EX operand
     wire [1:0] forward_a =
         (ex_mem_reg_we &&
-         ex_mem_rd != 0 &&
-         ex_mem_rd == id_ex_rs1) ? 2'b10 :
-
+         (ex_mem_rd != 0) &&
+         (ex_mem_rd == id_ex_rs1)) ? 2'b10 :
         (mem_wb_reg_we &&
-         mem_wb_rd != 0 &&
-         mem_wb_rd == id_ex_rs1) ? 2'b01 :
+         (mem_wb_rd != 0) &&
+         (mem_wb_rd == id_ex_rs1)) ? 2'b01 :
         2'b00;
 
     wire [1:0] forward_b =
         (ex_mem_reg_we &&
-         ex_mem_rd != 0 &&
-         ex_mem_rd == id_ex_rs2) ? 2'b10 :
-
+         (ex_mem_rd != 0) &&
+         (ex_mem_rd == id_ex_rs2)) ? 2'b10 :
         (mem_wb_reg_we &&
-         mem_wb_rd != 0 &&
-         mem_wb_rd == id_ex_rs2) ? 2'b01 :
+         (mem_wb_rd != 0) &&
+         (mem_wb_rd == id_ex_rs2)) ? 2'b01 :
         2'b00;
 
-    // Select forwarded or registered source operands.
     wire [31:0] fwd_rs1_data =
         (forward_a == 2'b10) ? ex_mem_alu_res :
         (forward_a == 2'b01) ? wb_data :
@@ -652,16 +551,14 @@ module vrm_cpu_rv32i_core (
         (id_ex_is_auipc || id_ex_is_jump) ? id_ex_pc :
         fwd_rs1_data;
 
-    wire [31:0] alu_src_b;
-
-    assign alu_src_b =
+    wire [31:0] alu_src_b =
         (id_ex_is_auipc) ? id_ex_imm_u :
         (id_ex_is_jump)  ? 32'd4 :
         (id_ex_opcode == 7'h33) ? fwd_rs2_data :
         id_ex_alu_op2;
 
     // -------------------------------------------------------------------------
-    // ALU Instance
+    // ALU
     // -------------------------------------------------------------------------
 
     wire [31:0] alu_result;
@@ -676,99 +573,129 @@ module vrm_cpu_rv32i_core (
     );
 
     // -------------------------------------------------------------------------
-    // Branch Comparison
+    // Branch Condition Evaluation
     // -------------------------------------------------------------------------
 
-    // Equality comparison.
-    wire is_eq = (fwd_rs1_data == fwd_rs2_data);
-
-    // Signed less-than comparison.
-    wire is_lt =
-        ($signed(fwd_rs1_data) < $signed(fwd_rs2_data));
-
-    // Unsigned less-than comparison.
-    wire is_ltu =
-        (fwd_rs1_data < fwd_rs2_data);
+    wire is_eq  = (fwd_rs1_data == fwd_rs2_data);
+    wire is_lt  = ($signed(fwd_rs1_data) < $signed(fwd_rs2_data));
+    wire is_ltu = (fwd_rs1_data < fwd_rs2_data);
 
     reg branch_cond;
 
-    // Decode branch condition based on funct3.
     always @(*) begin
         case (id_ex_funct3)
-
-            3'b000: branch_cond = is_eq;   // BEQ
-            3'b001: branch_cond = !is_eq;  // BNE
-            3'b100: branch_cond = is_lt;   // BLT
-            3'b101: branch_cond = !is_lt;  // BGE
-            3'b110: branch_cond = is_ltu;  // BLTU
-            3'b111: branch_cond = !is_ltu; // BGEU
-
-            default: branch_cond = 0;
+            3'b000: branch_cond = is_eq;    // BEQ
+            3'b001: branch_cond = !is_eq;   // BNE
+            3'b100: branch_cond = is_lt;    // BLT
+            3'b101: branch_cond = !is_lt;   // BGE
+            3'b110: branch_cond = is_ltu;   // BLTU
+            3'b111: branch_cond = !is_ltu;  // BGEU
+            default: branch_cond = 1'b0;
         endcase
     end
 
     // -------------------------------------------------------------------------
-    // Branch and Jump Control
+    // Branch and Jump Target Calculation
     // -------------------------------------------------------------------------
 
-    // A branch is taken when its condition is true.
-    // JAL and JALR are represented as jump operations.
     assign branch_taken_ex =
         (id_ex_is_branch && branch_cond) ||
         id_ex_is_jump;
 
-    // Generate target PC:
-    // - JALR uses rs1 + immediate with bit 0 cleared.
-    // - JAL uses PC + J-type immediate.
-    // - Conditional branches use PC + B-type immediate.
     assign target_pc_ex =
-        id_ex_is_jalr ? (fwd_rs1_data + id_ex_alu_op2) & 32'hFFFFFFFE :
+        id_ex_is_jalr ? ((fwd_rs1_data + id_ex_alu_op2) & 32'hFFFFFFFE) :
         id_ex_is_jump ? (id_ex_pc + id_ex_imm_j) :
         (id_ex_pc + id_ex_imm_b);
 
     assign is_mret_ex = id_ex_is_mret;
 
-    // Flush younger pipeline stages after a taken control-flow instruction
-    // or MRET operation.
-    assign flush_ex =
-        branch_taken_ex || is_mret_ex;
+    // Flush younger pipeline stages after control-flow redirection.
+    assign flush_ex = branch_taken_ex || is_mret_ex;
+
+    // =========================================================================
+    // STORE DATA ALIGNMENT AND BYTE-ENABLE GENERATION
+    // =========================================================================
+
+    reg [31:0] store_data;
+    reg [3:0]  store_be;
+
+    always @(*) begin
+
+        // Default to a full-word store.
+        store_data = fwd_rs2_data;
+        store_be   = 4'b1111;
+
+        if (id_ex_mem_we) begin
+            case (id_ex_funct3[1:0])
+
+                // -----------------------------------------------------------------
+                // Store Byte
+                // -----------------------------------------------------------------
+                2'b00: begin
+                    store_be   = 4'b0001 << alu_result[1:0];
+                    store_data = {4{fwd_rs2_data[7:0]}};
+                end
+
+                // -----------------------------------------------------------------
+                // Store Halfword
+                // -----------------------------------------------------------------
+                2'b01: begin
+                    store_be   = 4'b0011 << {alu_result[1], 1'b0};
+                    store_data = {2{fwd_rs2_data[15:0]}};
+                end
+
+                // -----------------------------------------------------------------
+                // Store Word
+                // -----------------------------------------------------------------
+                default: begin
+                    store_be   = 4'b1111;
+                    store_data = fwd_rs2_data;
+                end
+
+            endcase
+        end
+    end
 
     // =========================================================================
     // EX/MEM PIPELINE REGISTER
     // =========================================================================
 
     reg [31:0] ex_mem_wdata;
-    reg        ex_mem_mem_we;
-    reg        ex_mem_mem_re;
-    reg        ex_mem_is_wfi;
+    reg [3:0]  ex_mem_be;
+    reg [2:0]  ex_mem_funct3;
 
-    // -------------------------------------------------------------------------
-    // EX/MEM Pipeline Update
-    // -------------------------------------------------------------------------
+    reg ex_mem_mem_we;
+    reg ex_mem_mem_re;
+    reg ex_mem_is_wfi;
+
     always @(posedge clk) begin
-
         if (!rstn || irq_trigger) begin
 
-            ex_mem_reg_we <= 0;
-            ex_mem_mem_we <= 0;
-            ex_mem_mem_re <= 0;
-            ex_mem_rd     <= 0;
-            ex_mem_is_wfi <= 0;
+            // Cancel outstanding memory and WFI control on interrupt.
+            ex_mem_reg_we <= 1'b0;
+            ex_mem_mem_we <= 1'b0;
+            ex_mem_mem_re <= 1'b0;
+            ex_mem_rd     <= 5'b0;
+            ex_mem_is_wfi <= 1'b0;
+            ex_mem_be     <= 4'b0000;
 
         end else if (!cpu_halt) begin
 
-            // LUI uses its immediate directly as the final ALU result.
-            ex_mem_alu_res <=
-                id_ex_is_lui ? id_ex_imm_u : alu_result;
+            ex_mem_alu_res <= id_ex_is_lui ? id_ex_imm_u : alu_result;
 
-            ex_mem_wdata  <= fwd_rs2_data;
-            ex_mem_rd     <= id_ex_rd;
+            // Store data is already aligned and replicated according to
+            // the selected byte-enable pattern.
+            ex_mem_wdata   <= store_data;
+            ex_mem_be      <= store_be;
 
-            ex_mem_reg_we <= id_ex_reg_we;
-            ex_mem_mem_we <= id_ex_mem_we;
-            ex_mem_mem_re <= id_ex_mem_re;
+            ex_mem_funct3  <= id_ex_funct3;
 
-            ex_mem_is_wfi <= id_ex_is_wfi;
+            ex_mem_rd      <= id_ex_rd;
+            ex_mem_reg_we  <= id_ex_reg_we;
+            ex_mem_mem_we  <= id_ex_mem_we;
+            ex_mem_mem_re  <= id_ex_mem_re;
+            ex_mem_is_wfi  <= id_ex_is_wfi;
+
         end
     end
 
@@ -776,13 +703,10 @@ module vrm_cpu_rv32i_core (
     // 4. MEMORY ACCESS (MEM)
     // =========================================================================
 
-    // -------------------------------------------------------------------------
-    // Data Memory Interface
-    // -------------------------------------------------------------------------
-
     assign mem_addr  = ex_mem_alu_res;
     assign mem_wdata = ex_mem_wdata;
     assign mem_we    = ex_mem_mem_we;
+    assign mem_be    = ex_mem_be;
 
     // -------------------------------------------------------------------------
     // MEM/WB Pipeline Register
@@ -791,52 +715,105 @@ module vrm_cpu_rv32i_core (
     reg [31:0] mem_wb_alu_res;
     reg [31:0] mem_wb_mem_data;
 
-    reg mem_wb_mem_re;
-    reg mem_wb_is_wfi;
+    reg [2:0] mem_wb_funct3;
+    reg       mem_wb_mem_re;
+    reg       mem_wb_is_wfi;
 
-    // -------------------------------------------------------------------------
-    // MEM/WB Pipeline Update
-    // -------------------------------------------------------------------------
     always @(posedge clk) begin
-
         if (!rstn || irq_trigger) begin
 
-            mem_wb_reg_we <= 0;
-            mem_wb_rd     <= 0;
-            mem_wb_is_wfi <= 0;
+            mem_wb_reg_we <= 1'b0;
+            mem_wb_rd     <= 5'b0;
+            mem_wb_is_wfi <= 1'b0;
 
         end else if (!cpu_halt) begin
 
             mem_wb_alu_res  <= ex_mem_alu_res;
             mem_wb_mem_data <= mem_rdata;
+            mem_wb_funct3   <= ex_mem_funct3;
 
             mem_wb_rd       <= ex_mem_rd;
-
             mem_wb_reg_we   <= ex_mem_reg_we;
             mem_wb_mem_re   <= ex_mem_mem_re;
-
             mem_wb_is_wfi   <= ex_mem_is_wfi;
+
         end
     end
 
     // =========================================================================
-    // 5. WRITEBACK (WB)
+    // 5. WRITEBACK (WB) AND LOAD DATA EXTRACTION
     // =========================================================================
 
-    // Select either memory data or ALU result as the value written to the
-    // register file.
+    reg [31:0] load_data_formatted;
+
+    // Byte offset within the returned 32-bit memory word.
+    wire [1:0] load_byte_offset = mem_wb_alu_res[1:0];
+
+    // Shift the requested byte/halfword toward the least-significant bits.
+    wire [31:0] mem_rdata_shifted =
+        mem_wb_mem_data >> ({load_byte_offset, 3'b000});
+
+    // -------------------------------------------------------------------------
+    // Load Data Formatting
+    // -------------------------------------------------------------------------
+
     always @(*) begin
-        wb_data =
-            mem_wb_mem_re ? mem_wb_mem_data :
-            mem_wb_alu_res;
+
+        if (mem_wb_mem_re) begin
+
+            case (mem_wb_funct3)
+
+                // Load Byte - Sign Extended
+                3'b000:
+                    load_data_formatted =
+                        {{24{mem_rdata_shifted[7]}},
+                         mem_rdata_shifted[7:0]};
+
+                // Load Halfword - Sign Extended
+                3'b001:
+                    load_data_formatted =
+                        {{16{mem_rdata_shifted[15]}},
+                         mem_rdata_shifted[15:0]};
+
+                // Load Word
+                3'b010:
+                    load_data_formatted =
+                        mem_rdata_shifted;
+
+                // Load Byte Unsigned
+                3'b100:
+                    load_data_formatted =
+                        {24'b0, mem_rdata_shifted[7:0]};
+
+                // Load Halfword Unsigned
+                3'b101:
+                    load_data_formatted =
+                        {16'b0, mem_rdata_shifted[15:0]};
+
+                default:
+                    load_data_formatted =
+                        mem_rdata_shifted;
+
+            endcase
+
+        end else begin
+            load_data_formatted = 32'b0;
+        end
     end
+
+    // Select memory data for loads or the ALU result for other instructions.
+    assign wb_data =
+        mem_wb_mem_re ? load_data_formatted :
+        mem_wb_alu_res;
 
     // -------------------------------------------------------------------------
     // Register File Writeback
     // -------------------------------------------------------------------------
-    // Register x0 is protected from writes by excluding register index zero.
+
     always @(posedge clk) begin
-        if (mem_wb_reg_we && mem_wb_rd != 0) begin
+
+        // Register x0 is hardwired to zero and can never be modified.
+        if (mem_wb_reg_we && (mem_wb_rd != 5'd0)) begin
             reg_file[mem_wb_rd] <= wb_data;
         end
     end
@@ -848,12 +825,11 @@ module vrm_cpu_rv32i_core (
     assign debug_reg_x1 = reg_file[1];
 
     // =========================================================================
-    // CPU HALT CONTROL
+    // CPU HALT / WFI STATUS
     // =========================================================================
-    // The processor remains halted while a WFI instruction is active.
-    // An accepted interrupt clears the halt condition and allows execution
-    // to resume.
-    assign cpu_halt =
-        mem_wb_is_wfi && !irq_trigger;
+
+    // The processor remains halted while waiting for an interrupt after WFI.
+    // An incoming interrupt immediately releases the halt condition.
+    assign cpu_halt = mem_wb_is_wfi && !irq_trigger;
 
 endmodule
