@@ -1,329 +1,232 @@
 # RV64IMFD Verification
 
-## 1. Overview
+## Overview
 
-Verification of the RV64IMFD system is performed incrementally.
+The `vrm_cpu_rv64_core` has undergone a core-level simulation stress test covering representative functionality from the RV64I, M, and basic F/D execution paths.
 
-The verification strategy separates:
+The testbench executes a small firmware image directly from a behavioral instruction-memory model and uses a behavioral byte-addressable data-memory model.
 
-```text
-Unit Verification
-       ↓
-Subsystem Verification
-       ↓
-CPU Integration
-       ↓
-SoC Integration
-       ↓
-Firmware Execution
-       ↓
-FPGA Validation
-```
-
-Passing one level does not automatically imply that the higher-level system is fully verified.
+The test is intended to verify functional integration of the major CPU datapaths rather than provide exhaustive ISA compliance coverage.
 
 ---
 
-## 2. Unit-Level Verification
+## Testbench
 
-Individual hardware blocks should be tested independently where practical.
-
-Primary units include:
+The main stress testbench is:
 
 ```text
-vrm_alu_rv64i
-vrm_mdu_rv64m
-vrm_fpu_rv64fd
-vrm_cpu_timer_64
-vrm_cpu_irq_arbiter_64
+tb_vrm_cpu_rv64_core
 ```
 
----
+The testbench provides:
 
-## 3. ALU Verification
+* Instruction memory model
+* Data memory model
+* Clock and reset generation
+* Software-like instruction generation through Verilog helper tasks
+* Integer arithmetic tests
+* Multiply/divide tests
+* Load/store tests
+* Branch-loop test
+* Floating-point load and arithmetic tests
+* `WFI` halt detection
+* Final architectural register inspection
 
-The ALU verification should cover:
-
-- Arithmetic operations
-- Logical operations
-- Shift operations
-- Signed comparisons
-- Unsigned comparisons
-- Immediate operations
-- Word operations
-
-Boundary values should be included in the test vectors.
-
----
-
-## 4. MDU Verification
-
-MDU testing should cover:
-
-### Multiplication
+The firmware is generated using helper tasks such as:
 
 ```text
-MUL
-MULH
-MULHSU
-MULHU
-MULW
-```
-
-### Division
-
-```text
-DIV
-DIVU
-DIVW
-DIVUW
-```
-
-### Remainder
-
-```text
-REM
-REMU
-REMW
-REMUW
-```
-
-Special cases include:
-
-```text
-division by zero
-signed overflow
-zero operands
-negative operands
-maximum/minimum values
-```
-
----
-
-## 5. FPU Verification
-
-FPU verification is performed in conjunction with the dedicated:
-
-```text
-VRM21-FPU-Series
-```
-
-CPU-level verification must additionally test:
-
-- Operand routing
-- Result routing
-- Integer/FP register transfers
-- FPU forwarding
-- FPU stalls
-- Floating-point loads/stores
-- NaN-boxing
-- Multi-cycle operation behavior
-
----
-
-## 6. Pipeline Verification
-
-Pipeline tests should deliberately create dependencies.
-
-Examples include:
-
-```text
-ALU → ALU dependency
-LOAD → ALU dependency
-MDU → ALU dependency
-FPU → FPU dependency
-FPU → GPR dependency
-GPR → FPU dependency
-```
-
-Control hazards should include:
-
-```text
-taken branch
-not-taken branch
-JAL
-JALR
-MRET
-```
-
----
-
-## 7. Memory Verification
-
-Memory testing should cover:
-
-```text
-LB
-LBU
-LH
-LHU
-LW
-LWU
+ADDI
+ADD
+SUB
+SLLI
 LD
-
-SB
-SH
-SW
 SD
-```
-
-Tests should include different byte offsets and memory wait states.
-
----
-
-## 8. Interrupt Verification
-
-Interrupt tests should cover:
-
-- Timer interrupt generation
-- External interrupt synchronization
-- Pending interrupt generation
-- Interrupt enable masking
-- Pending interrupt clearing
-- CPU interrupt entry
-- `mepc`
-- Interrupt handler execution
-- `MRET`
-- WFI wake-up
-
----
-
-## 9. Firmware-Level Verification
-
-The GCC firmware provides an end-to-end execution test.
-
-The test sequence should verify:
-
-```text
-Reset
- ↓
-Boot
- ↓
-Stack initialization
- ↓
-C runtime entry
- ↓
-MMIO access
- ↓
-Interrupt operation
- ↓
+BNE
+MUL
+DIV
+FLD
+FADD_D
+FMUL_D
 WFI
 ```
 
 ---
 
-## 10. Waveform Inspection
+## Simulation Result
 
-For debugging, important signals include:
+The stress test completed successfully and reached the expected `WFI` halt state.
 
-```text
-pc
-if_id_pc
-if_id_instr
-
-id_ex_opcode
-id_ex_rd
-id_ex_rs1
-id_ex_rs2
-
-ex_mem_alu_res
-ex_mem_rd
-
-mem_wb_rd
-mem_wb_reg_we
-mem_wb_freg_we
-
-stall_load_use
-stall_mdu
-stall_fpu
-mem_busy
-
-mdu_valid_out
-fpu_valid_out
-
-irq_trigger
-in_isr
-mepc
-```
-
-These signals provide visibility into pipeline progression and stall/flush behavior.
-
----
-
-## 11. Reference Model
-
-Where practical, arithmetic results should be compared against a software reference model.
-
-For example:
+Representative console output:
 
 ```text
-RTL MDU result
-        vs
-software integer arithmetic
+[CPU] HALT REACHED. Test Complete.
 ```
 
-and:
+The following results were observed.
+
+### Integer ALU
+
+| Test | Register | Actual | Expected | Result |
+| ---- | -------: | -----: | -------: | ------ |
+| ADD  |       x3 |    150 |      150 | PASS   |
+| SUB  |       x4 |     50 |       50 | PASS   |
+| SLLI |       x5 |    400 |      400 | PASS   |
+
+### Integer M Extension
+
+| Test | Register | Actual | Expected | Result |
+| ---- | -------: | -----: | -------: | ------ |
+| MUL  |       x6 |   5000 |     5000 | PASS   |
+| DIV  |       x7 |      2 |        2 | PASS   |
+
+### Memory Path
+
+| Test | Register | Actual | Expected | Result |
+| ---- | -------: | -----: | -------: | ------ |
+| LD   |       x8 |   5000 |     5000 | PASS   |
+| LD   |       x9 |      2 |        2 | PASS   |
+
+The preceding `SD` operations were used to populate the behavioral data memory.
+
+### Branch
+
+The test executes a decrementing loop using `BNE`.
+
+| Test     | Register | Actual | Expected | Result |
+| -------- | -------: | -----: | -------: | ------ |
+| BNE loop |      x10 |      0 |        0 | PASS   |
+
+This verifies the tested branch condition, immediate generation, target calculation, and pipeline flush behavior.
+
+---
+
+## Floating-Point Integration
+
+The FPU path was tested by loading IEEE-754 double-precision operands directly from memory.
+
+The firmware performs:
 
 ```text
-RTL FPU result
-        vs
-reference floating-point implementation
+FLD f0, ...
+FLD f1, ...
+
+FADD.D f2, f0, f1
+FMUL.D f3, f0, f1
 ```
 
-The reference model should also account for architectural corner cases rather than relying only on ordinary numerical examples.
+Expected values:
+
+```text
+f0 = 100.0
+f1 = 50.0
+
+f2 = 150.0
+f3 = 5000.0
+```
+
+Observed register contents:
+
+```text
+f2 = 4062C00000000000
+f3 = 40B3880000000000
+```
+
+These correspond to:
+
+```text
+4062C00000000000 = 150.0
+40B3880000000000 = 5000.0
+```
+
+Result:
+
+```text
+FADD.D : PASS
+FMUL.D : PASS
+FPR writeback : PASS
+```
+
+This test specifically validates the basic CPU/FPU integration path:
+
+```text
+FLD
+  |
+  v
+FPR
+  |
+  v
+FPU
+  |
+  v
+FPR writeback
+```
 
 ---
 
-## 12. Simulation Status
+## WFI / Halt
 
-The simulation environment is under active development.
+The firmware terminates with:
 
-Individual blocks may reach different verification maturity levels.
+```text
+WFI
+```
 
-Therefore, verification status should be tracked per subsystem rather than represented by a single overall "verified" label.
+The testbench waits for:
 
----
+```text
+cpu_halt == 1'b1
+```
 
-## 13. FPGA Validation
+The CPU reached the expected halt state within the simulation timeout.
 
-FPGA validation is a separate stage.
+Result:
 
-A successful RTL simulation does not constitute FPGA validation.
-
-FPGA testing should verify:
-
-- Synthesis
-- Timing
-- Resource utilization
-- DSP inference
-- RAM inference
-- Multi-cycle operation
-- Reset behavior
-- Interrupt behavior
-- Firmware execution
-- External memory interface behavior
+```text
+WFI / CPU halt : PASS
+```
 
 ---
 
-## 14. Compliance
+## Verification Summary
 
-No complete RISC-V architectural compliance claim is made at this stage.
-
-Formal compliance testing should be performed after the RTL architecture and verification environment have stabilized.
+| Functional Area  | Result |
+| ---------------- | ------ |
+| Integer ALU      | PASS   |
+| Integer multiply | PASS   |
+| Integer divide   | PASS   |
+| Load/store       | PASS   |
+| Branch loop      | PASS   |
+| FPU load         | PASS   |
+| FADD.D           | PASS   |
+| FMUL.D           | PASS   |
+| FPR writeback    | PASS   |
+| WFI / halt       | PASS   |
 
 ---
 
-## 15. Verification Status
+## Verification Boundary
 
-| Area | Status |
-|---|---|
-| ALU | Implemented / verification ongoing |
-| MDU | Implemented / verification ongoing |
-| FPU | Integrated / verification ongoing |
-| Pipeline | Verification ongoing |
-| Memory | Verification ongoing |
-| Timer | Implemented / verification ongoing |
-| Interrupts | Verification ongoing |
-| Firmware | Initial environment |
-| Full ISA compliance | Not yet claimed |
-| FPGA validation | Pending / ongoing |
+This test should be considered a **functional integration stress test**.
+
+It does not constitute exhaustive ISA compliance testing.
+
+The following areas require additional verification:
+
+* Complete RV64I instruction coverage
+* Complete RV64M instruction coverage
+* Complete RV64F instruction coverage
+* Complete RV64D instruction coverage
+* Floating-point corner cases
+* NaN and infinity behavior
+* Rounding modes
+* Exceptions and traps
+* Privileged instructions
+* CSR behavior
+* Interrupt corner cases
+* Misaligned memory access behavior
+* Formal verification
+* FPGA-level CPU integration
+
+Accordingly, the current status is:
+
+> **Core-level simulation stress test passed; exhaustive architectural verification remains ongoing.**
