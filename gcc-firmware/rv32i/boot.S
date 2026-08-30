@@ -1,4 +1,3 @@
-```asm
 .section .init
 .global _start
 
@@ -51,4 +50,3 @@ halt:
 
     # Resume execution here if WFI returns without a handled interrupt.
     j halt
-```
