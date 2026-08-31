@@ -1,18 +1,61 @@
 `timescale 1ns / 1ps
 
 // ============================================================================
-// STRESS TESTBENCH: VRM_CPU_RV64_CORE
-// Description:
-//   Comprehensive RV64IMFD stress test covering:
-//     - RV64I ALU operations
-//     - RV64M multiplication and division
-//     - 64-bit load/store operations
-//     - Conditional branch and loop execution
-//     - Double-precision floating-point operations
-//     - WFI / CPU halt behavior
+// Testbench   : tb_vrm_cpu_rv64_core
+// Description : Comprehensive RV64IMFD CPU stress test covering 64-bit
+//               integer execution, multiplication/division, memory access,
+//               control-flow looping, double-precision floating-point
+//               operations, and WFI CPU halt behavior.
 //
-// FPU verification uses FLD directly from the data memory to avoid depending
-// on integer-to-floating-point conversion instructions during this test.
+// Verification Scope:
+//   - RV64I integer ALU operations
+//   - RV64M multiplication and division
+//   - 64-bit load/store operations
+//   - Byte-addressable little-endian memory access
+//   - Conditional branch and loop execution
+//   - Double-precision floating-point load operations
+//   - Double-precision floating-point addition
+//   - Double-precision floating-point multiplication
+//   - WFI and CPU halt behavior
+//   - Register-file and floating-point register verification
+//
+// Features:
+//   - 100 MHz simulation clock
+//   - 64-bit CPU address and data interfaces
+//   - Instruction memory mapped from CPU reset address 0x4000
+//   - 8 KB byte-addressable little-endian data memory model
+//   - 64-bit write-strobe support
+//   - Minimal RV64 instruction-generation macros
+//   - Waveform generation to VCD
+//   - Timeout protection for stalled or non-terminating execution
+//   - Direct inspection of integer and floating-point register files
+//
+// Test Program:
+//   - Integer ALU: ADD, SUB, and SLLI
+//   - Integer MDU: MUL and DIV
+//   - Integer memory: SD and LD
+//   - Floating-point: FLD, FADD.D, and FMUL.D
+//   - Control flow: BNE-based decrement loop
+//   - System control: WFI
+//
+// Floating-Point Verification:
+//   - Operand 1: 100.0 (IEEE-754 double precision)
+//   - Operand 2: 50.0  (IEEE-754 double precision)
+//   - FADD.D expected result: 150.0
+//   - FMUL.D expected result: 5000.0
+//
+// Notes:
+//   - Floating-point operands are injected directly into data memory and
+//     loaded using FLD to isolate the basic FPU datapath from integer-to-FP
+//     conversion instructions.
+//   - The data memory model is little-endian and supports independent byte
+//     writes through mem_wstrb.
+//   - The testbench is intended as a broad functional stress test rather than
+//     a complete architectural compliance suite.
+//
+// Output:
+//   - Simulation console reports for integer, memory, branch, and FPU tests.
+//   - vrm_cpu_stress.vcd waveform dump for post-simulation analysis.
 // ============================================================================
 
 module tb_vrm_cpu_rv64_core;
