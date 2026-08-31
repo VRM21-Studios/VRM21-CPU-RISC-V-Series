@@ -1,5 +1,64 @@
 `timescale 1ns / 1ps
 
+// ============================================================================
+// Testbench   : tb_vrm_cpu_rv32i_core
+// Description : RV32I CPU core verification using an in-testbench instruction
+//               and data memory model.
+//
+// Features:
+//   - RV32I instruction execution verification
+//   - R-type and I-type ALU instruction testing
+//   - Immediate and upper-immediate instruction testing
+//   - Load/store instruction verification
+//   - Byte-enable generation and byte/halfword load testing
+//   - Load-use hazard verification
+//   - Branch and pipeline flush verification
+//   - WFI and MRET interrupt handling verification
+//   - Machine-mode interrupt wake-up testing
+//   - Self-checking register and memory result verification
+//
+// Instruction Coverage:
+//   - LUI
+//   - AUIPC support through instruction encoding helpers
+//   - ADD / SUB
+//   - SLLI
+//   - SLT / SLTU
+//   - XOR / OR / AND
+//   - SRLI / SRAI
+//   - LB / LBU / LH / LW
+//   - SB / SH / SW
+//   - BEQ
+//   - JAL
+//   - MRET
+//   - WFI
+//
+// Memory Model:
+//   - 64-word instruction memory
+//   - 64-word data memory
+//   - Asynchronous instruction fetch
+//   - Asynchronous data read
+//   - Synchronous data write
+//   - Byte-enable support for store operations
+//
+// Interrupt Behavior:
+//   - Interrupt request generated after the CPU enters WFI.
+//   - Interrupt handling is verified through the implemented ISR entry,
+//     MRET execution, and post-interrupt instruction execution.
+//
+// Verification:
+//   - Register file contents are checked against expected results.
+//   - Data memory contents are checked after store operations.
+//   - Pipeline hazard and branch flush behavior are verified indirectly
+//     through architectural register results.
+//   - WFI and interrupt recovery are verified through the post-interrupt
+//     execution result.
+//
+// Notes:
+//   - The testbench uses local instruction encoding helper functions to
+//     construct raw 32-bit RV32I instructions.
+//   - The memory model is intended for simulation and verification only.
+// ============================================================================
+
 module tb_vrm_cpu_rv32i_core();
 
     // =========================================================================
