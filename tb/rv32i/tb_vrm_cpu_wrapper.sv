@@ -1,5 +1,62 @@
 `timescale 1ns / 1ps
 
+// ============================================================================
+// Testbench   : tb_vrm_cpu_wrapper
+// Description : RV32I CPU wrapper integration verification using simulated
+//               instruction memory, external data memory, hardware timer,
+//               and interrupt arbiter interfaces.
+//
+// Features:
+//   - RV32I CPU wrapper integration testing
+//   - Instruction memory model
+//   - External data memory model
+//   - Hardware timer configuration and interrupt generation
+//   - Interrupt arbiter configuration and pending-bit clearing
+//   - WFI and MRET interrupt handling verification
+//   - External memory access from the interrupt service routine
+//   - Post-interrupt instruction execution verification
+//   - Self-checking verification of CPU, interrupt, and memory results
+//
+// Test Flow:
+//   1. Initialize instruction and external data memory models.
+//   2. Configure the interrupt arbiter to accept the hardware timer source.
+//   3. Configure and start the hardware timer.
+//   4. Enter the CPU WFI state.
+//   5. Wait for the timer interrupt to wake the CPU.
+//   6. Execute the interrupt service routine.
+//   7. Clear the timer and interrupt arbiter pending status.
+//   8. Write an ISR execution marker to external memory.
+//   9. Return from the interrupt using MRET.
+//  10. Verify post-interrupt execution and system state.
+//
+// Memory Model:
+//   - 64-word instruction memory
+//   - 64-word external data memory
+//   - Asynchronous instruction read
+//   - Asynchronous external data read
+//   - Synchronous external data write
+//
+// Interrupt Sources:
+//   - External interrupt input is held inactive during the test.
+//   - Interrupt source bit 0 is reserved for the internal hardware timer.
+//   - The hardware timer interrupt is routed through the interrupt arbiter.
+//
+// Verification:
+//   - CPU wake-up from WFI is verified through post-interrupt execution.
+//   - Interrupt service routine execution is verified using an external RAM
+//     marker value.
+//   - Interrupt arbiter pending status is verified after the ISR clears it.
+//   - External memory access through the CPU wrapper is verified.
+//
+// Notes:
+//   - The testbench uses local RV32I instruction encoding helper functions
+//     to construct raw 32-bit instructions.
+//   - The memory and peripheral models are intended for simulation and
+//     verification only.
+//   - The testbench targets the implemented CPU wrapper integration behavior,
+//     including the current pipeline and interrupt return mechanism.
+// ============================================================================
+
 module tb_vrm_cpu_wrapper();
 
     // =========================================================================
