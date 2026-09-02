@@ -10,6 +10,16 @@ The RV64IMFD implementation extends the series toward a 64-bit processor archite
 
 ---
 
+## Motivation
+
+This project was developed as part of a self-directed study of computer architecture through practical RTL implementation.
+
+Rather than studying processor architecture only from an ISA or software perspective, the project explores how instructions are decoded, executed, and moved through an actual hardware datapath. The RISC-V architecture provides an accessible and open foundation for studying concepts such as pipelining, hazard handling, memory interfaces, control logic, and processor state.
+
+The primary objective of the project is therefore educational: to develop a deeper understanding of how a processor works by implementing and examining its architecture at the RTL level.
+
+---
+
 ## Repository Status
 
 | Component                        | Status                        |
