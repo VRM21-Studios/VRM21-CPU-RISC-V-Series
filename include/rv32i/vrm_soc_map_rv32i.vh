@@ -2,127 +2,153 @@
 `define VRM_SOC_MAP_RV32I_VH
 
 // ============================================================================
-// MODULE: VRM SoC Memory Map
-// DESCRIPTION:
-// Memory-map definitions for the VRM RV32I-based SoC.
+// VRM RV32I SoC Memory Map
+// ----------------------------------------------------------------------------
+// Address-space organization:
 //
-// The address space is organized into two main tiers:
-// - Tier 1 : System core peripherals and memory
-// - Tier 2 : Application-specific accelerators
+//   Tier 0 : System memory
+//            - Boot ROM
+//            - System RAM
 //
-// This header file contains address definitions only. It does not implement
-// any hardware logic.
+//   Tier 1 : System core peripherals
+//            - Hardware timer
+//            - Interrupt arbiter
 //
-// Address regions are defined using BASE_ADDR and SIZE parameters. The
-// corresponding END_ADDR is calculated automatically as BASE_ADDR + SIZE.
+//   Tier 2 : Application-specific accelerators
+//            - Reserved for DSP, NPU, audio, and other peripherals
 // ============================================================================
 
 
 // ============================================================================
-// TIER 1: SYSTEM CORE
-// ----------------------------------------------------------------------------
-// Low-address region reserved for fundamental system resources such as RAM,
-// timers, and interrupt control.
+// TIER 0: SYSTEM MEMORY
 // ============================================================================
 
-
 // ----------------------------------------------------------------------------
-// 0. SYSTEM RAM
+// 0. BOOT ROM
 // ----------------------------------------------------------------------------
-// Main system memory region.
+// Firmware boot image storage.
 //
-// Current configuration:
-// - Base address : 0x0000_0000
-// - Size         : 4 KB
+// Base address : 0x0000_0000
+// Size         : 4 KB
 // ----------------------------------------------------------------------------
 
-`define RAM_BASE_ADDR   32'h0000_0000
-`define RAM_SIZE        32'h0000_1000
-`define RAM_END_ADDR    (`RAM_BASE_ADDR + `RAM_SIZE)
+`define ROM_BASE_ADDR       32'h0000_0000
+`define ROM_SIZE            32'h0000_1000
+`define ROM_END_ADDR        (`ROM_BASE_ADDR + `ROM_SIZE)
 
 
 // ----------------------------------------------------------------------------
-// 1. HARDWARE TIMER
+// 1. SYSTEM RAM
 // ----------------------------------------------------------------------------
-// Memory-mapped hardware timer peripheral.
+// Main system memory used by the CPU after the boot process.
+//
+// Base address : 0x1000_0000
+// Size         : 64 KB
+// ----------------------------------------------------------------------------
+
+`define RAM_BASE_ADDR       32'h1000_0000
+`define RAM_SIZE            32'h0001_0000
+`define RAM_END_ADDR        (`RAM_BASE_ADDR + `RAM_SIZE)
+
+
+// ============================================================================
+// TIER 1: SYSTEM CORE PERIPHERALS
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// 2. HARDWARE TIMER
+// ----------------------------------------------------------------------------
+//
+// Base address : 0x4000_0000
 //
 // Register map:
-//   BASE + 0x00 : Control register
-//   BASE + 0x04 : Compare value
-//   BASE + 0x08 : Counter value
-//   BASE + 0x0C : Interrupt status
+//   +0x00 : Control register
+//   +0x04 : Compare value
+//   +0x08 : Counter value
+//   +0x0C : Interrupt status
 //
 // CTRL register:
-//   Bit 0 : Timer Enable
-//   Bit 1 : Auto Reload
-//   Bit 2 : Interrupt Enable
+//   Bit 0 : Timer enable
+//   Bit 1 : Auto reload
+//   Bit 2 : Interrupt enable
 //
 // STATUS register:
-//   Bit 0 : Interrupt Pending
+//   Bit 0 : Interrupt pending
 //           W1C (Write 1 to Clear)
+// ----------------------------------------------------------------------------
+
+`define TIMER_BASE_ADDR     32'h4000_0000
+
+`define TIMER_CTRL          32'h0000_0000
+`define TIMER_COMPARE       32'h0000_0004
+`define TIMER_COUNTER       32'h0000_0008
+`define TIMER_STATUS        32'h0000_000C
+
+`define TIMER_SIZE          32'h0000_0100
+`define TIMER_END_ADDR      (`TIMER_BASE_ADDR + `TIMER_SIZE)
+
+
+// ----------------------------------------------------------------------------
+// 3. INTERRUPT ARBITER
+// ----------------------------------------------------------------------------
 //
-// The timer peripheral occupies a 256-byte address region.
-// ----------------------------------------------------------------------------
-
-`define TIMER_BASE_ADDR 32'h0000_1000
-
-`define TIMER_CTRL      32'h0000_0000
-`define TIMER_COMPARE   32'h0000_0004
-`define TIMER_COUNTER   32'h0000_0008
-`define TIMER_STATUS    32'h0000_000C
-
-`define TIMER_SIZE      32'h0000_0100
-`define TIMER_END_ADDR  (`TIMER_BASE_ADDR + `TIMER_SIZE)
-
-
-// ----------------------------------------------------------------------------
-// 2. INTERRUPT ARBITER
-// ----------------------------------------------------------------------------
-// Central interrupt controller for the RV32I system.
-//
-// The arbiter collects interrupt sources, stores pending interrupt status,
-// applies per-source enable masking, and generates the interrupt request
-// delivered to the CPU.
+// Base address : 0x4000_1000
 //
 // Register map:
-//   BASE + 0x00 : Pending register
-//   BASE + 0x04 : Enable register
-//   BASE + 0x08 : Clear register
+//   +0x00 : Pending interrupt register
+//   +0x04 : Interrupt enable register
+//   +0x08 : Interrupt clear register
 //
-// PENDING register:
+// PENDING:
 //   Read-only interrupt pending status.
 //
-// ENABLE register:
-//   Read/write interrupt mask.
+// ENABLE:
 //   Bit = 1 : Interrupt source enabled.
 //   Bit = 0 : Interrupt source disabled.
 //
-// CLEAR register:
+// CLEAR:
 //   W1C (Write 1 to Clear).
-//   Writing a '1' clears the corresponding pending interrupt.
-//
-// The interrupt arbiter occupies a 256-byte address region.
 // ----------------------------------------------------------------------------
 
-`define IRQ_BASE_ADDR   32'h0000_2000
+`define IRQ_BASE_ADDR       32'h4000_1000
 
-`define IRQ_REG_PENDING 32'h0000_0000
-`define IRQ_REG_ENABLE  32'h0000_0004
-`define IRQ_REG_CLEAR   32'h0000_0008
+`define IRQ_REG_PENDING     32'h0000_0000
+`define IRQ_REG_ENABLE      32'h0000_0004
+`define IRQ_REG_CLEAR       32'h0000_0008
 
-`define IRQ_SIZE        32'h0000_0100
-`define IRQ_END_ADDR    (`IRQ_BASE_ADDR + `IRQ_SIZE)
+`define IRQ_SIZE            32'h0000_0100
+`define IRQ_END_ADDR        (`IRQ_BASE_ADDR + `IRQ_SIZE)
 
 
 // ============================================================================
 // TIER 2: APPLICATION ACCELERATORS
 // ----------------------------------------------------------------------------
-// Higher address space reserved for application-specific hardware such as
-// DSP, NPU, audio processing, and other accelerator peripherals.
+// Reserved address space for application-specific peripherals.
 //
-// Additional peripheral mappings can be added here without modifying the
-// system-core address definitions above.
+// Future examples:
+//   - DSP accelerators
+//   - Audio processing modules
+//   - NPU / AI accelerators
+//   - Custom hardware peripherals
+//
+// New accelerator definitions should be added below without modifying the
+// Tier 0 or Tier 1 memory map.
 // ============================================================================
+
+
+// ----------------------------------------------------------------------------
+// DSP ACCELERATOR TEMPLATE
+// ----------------------------------------------------------------------------
+//
+// Example placeholder for a future memory-mapped DSP peripheral.
+//
+// `define DSP_BASE_ADDR       32'h8000_0000
+// `define DSP_SIZE            32'h0000_0100
+// `define DSP_END_ADDR        (`DSP_BASE_ADDR + `DSP_SIZE)
+//
+// Register definitions can be added when a specific DSP peripheral is
+// integrated into the SoC.
+// ----------------------------------------------------------------------------
 
 
 // ============================================================================
