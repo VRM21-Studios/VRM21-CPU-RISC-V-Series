@@ -1,52 +1,88 @@
 .section .init
-.global _start
 
-# ============================================================================
-# VRM RV32I CPU - Boot and Interrupt Vector
-#
-# Memory layout:
-#   0x00000000 : Reset vector
-#   0x00000004 : Machine-mode interrupt vector
-#
-# The reset vector transfers execution to reset_handler.
-# The interrupt vector transfers execution to timer_isr.
-# ============================================================================
+.global _start
+.global reset_handler
+
+
+/*
+ * ============================================================================
+ * RESET VECTOR
+ * ============================================================================
+ *
+ * The VRM RV32I CPU begins execution at address 0x00000000.
+ *
+ * The reset vector transfers control to reset_handler, which performs the
+ * minimal processor initialization required before entering the C runtime.
+ * ============================================================================
+ */
 
 _start:
-    # Reset vector
-    # Jump to the main reset handler.
     j reset_handler
 
 
-# ============================================================================
-# MACHINE INTERRUPT VECTOR
-# ============================================================================
+/*
+ * ============================================================================
+ * INTERRUPT VECTOR
+ * ============================================================================
+ *
+ * The CPU redirects machine-mode interrupts to address 0x00000004.
+ *
+ * This vector transfers control to the timer interrupt service routine.
+ *
+ * Additional interrupt dispatch logic can be added here if the SoC supports
+ * multiple interrupt sources or software-based interrupt identification.
+ * ============================================================================
+ */
 
 isr_vector:
-    # Transfer control to the timer interrupt service routine.
-    # The ISR is compiled using the machine-mode interrupt calling convention.
     j timer_isr
 
 
-# ============================================================================
-# RESET HANDLER
-# ============================================================================
+/*
+ * ============================================================================
+ * RESET HANDLER
+ * ============================================================================
+ *
+ * The reset handler performs the minimum initialization required before the
+ * main C firmware is executed.
+ *
+ * Initialization sequence:
+ *
+ *   1. Initialize the stack pointer.
+ *   2. Transfer control to main().
+ *
+ * The firmware is loaded into system RAM by the hardware bootloader before
+ * the CPU is released from reset.
+ * ============================================================================
+ */
 
 reset_handler:
-    # Initialize the stack pointer using the linker-provided stack symbol.
+
+    /*
+     * Initialize the stack pointer using the address provided by the linker.
+     */
     la sp, _stack_top
 
-    # Enter the C runtime/application entry point.
+    /*
+     * Enter the main C firmware.
+     */
     jal ra, main
 
 
-# ============================================================================
-# FALLBACK HALT LOOP
-# ============================================================================
+/*
+ * ============================================================================
+ * FALLBACK HALT HANDLER
+ * ============================================================================
+ *
+ * main() is expected to remain active for the lifetime of the firmware.
+ *
+ * If main() unexpectedly returns, the processor enters the WFI state rather
+ * than continuing execution into undefined memory.
+ *
+ * The processor remains capable of responding to a valid interrupt.
+ * ============================================================================
+ */
 
 halt:
-    # Keep the processor idle if main() ever returns.
     wfi
-
-    # Resume execution here if WFI returns without a handled interrupt.
     j halt
