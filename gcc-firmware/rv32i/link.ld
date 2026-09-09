@@ -1,50 +1,107 @@
+/*
+ * ============================================================================
+ * VRM RV32I SoC LINKER SCRIPT
+ * ============================================================================
+ *
+ * This linker script defines the memory layout of firmware executed by the
+ * VRM RV32I SoC.
+ *
+ * The firmware image is linked to the beginning of the unified 64-KB system
+ * RAM. During system startup, the hardware bootloader copies the firmware
+ * image into this memory region before releasing the CPU.
+ *
+ * Memory Organization:
+ *
+ *   Base Address : 0x00000000
+ *   Size         : 64 KB
+ *
+ * The memory region contains:
+ *
+ *   - Startup and interrupt vectors
+ *   - Executable code
+ *   - Read-only data
+ *   - Initialized data
+ *   - Uninitialized data
+ *   - Runtime stack
+ * ============================================================================
+ */
+
 OUTPUT_ARCH("riscv")
 ENTRY(_start)
 
-# ============================================================================
-# VRM RV32I MEMORY LAYOUT
-#
-# The initial firmware image is linked into the 4 KB system RAM region.
-#
-# RAM:
-#   Base address : 0x00000000
-#   Size         : 4 KB
-#
-# The hardware timer and interrupt arbiter are mapped outside this RAM region:
-#   Timer          : 0x00001000
-#   IRQ Arbiter    : 0x00002000
-# ============================================================================
+
+/*
+ * ============================================================================
+ * MEMORY REGIONS
+ * ============================================================================
+ */
 
 MEMORY
 {
-    RAM (rwx) : ORIGIN = 0x00000000, LENGTH = 0x1000
+    /*
+     * Unified system RAM.
+     *
+     * The firmware is loaded into this region by the hardware bootloader.
+     */
+    RAM (rwx) : ORIGIN = 0x00000000, LENGTH = 0x00010000
 }
 
 
-# ============================================================================
-# SECTION LAYOUT
-# ============================================================================
+/*
+ * ============================================================================
+ * SECTION LAYOUT
+ * ============================================================================
+ */
 
 SECTIONS
 {
-    # ------------------------------------------------------------------------
-    # Program code and read-only data
-    # ------------------------------------------------------------------------
+    /*
+     * ------------------------------------------------------------------------
+     * CODE AND READ-ONLY DATA
+     * ------------------------------------------------------------------------
+     *
+     * The .init section is placed first to ensure that the reset and interrupt
+     * vectors occupy the lowest addresses in the firmware image.
+     *
+     * Expected vector layout:
+     *
+     *   0x00000000 : Reset vector
+     *   0x00000004 : Interrupt vector
+     */
+
     .text :
     {
-        . = ALIGN(4);
+        /*
+         * Startup code and processor vectors.
+         */
+        KEEP(*(.init))
 
-        *(.init)
+        /*
+         * Executable program code.
+         */
         *(.text*)
+
+        /*
+         * Read-only program data.
+         */
         *(.rodata*)
 
+        /*
+         * Maintain 32-bit alignment for subsequent sections.
+         */
         . = ALIGN(4);
+
     } > RAM
 
 
-    # ------------------------------------------------------------------------
-    # Initialized global/static data
-    # ------------------------------------------------------------------------
+    /*
+     * ------------------------------------------------------------------------
+     * INITIALIZED DATA
+     * ------------------------------------------------------------------------
+     *
+     * Contains global and static variables with initial values.
+     */
+
     .data :
     {
         . = ALIGN(4);
@@ -52,27 +109,56 @@ SECTIONS
         *(.data*)
 
         . = ALIGN(4);
+
     } > RAM
 
 
-    # ------------------------------------------------------------------------
-    # Zero-initialized global/static data
-    # ------------------------------------------------------------------------
-    .bss :
+    /*
+     * ------------------------------------------------------------------------
+     * UNINITIALIZED DATA
+     * ------------------------------------------------------------------------
+     *
+     * Contains global and static variables without explicit initialization.
+     *
+     * The NOLOAD attribute prevents this section from unnecessarily increasing
+     * the firmware image size.
+     */
+
+    .bss (NOLOAD) :
     {
         . = ALIGN(4);
+
+        __bss_start = .;
 
         *(.bss*)
         *(COMMON)
 
         . = ALIGN(4);
+
+        __bss_end = .;
+
     } > RAM
 
 
-    # ------------------------------------------------------------------------
-    # Stack
-    #
-    # The stack grows downward from the top of the available RAM region.
-    # ------------------------------------------------------------------------
+    /*
+     * ------------------------------------------------------------------------
+     * STACK
+     * ------------------------------------------------------------------------
+     *
+     * The stack grows downward from the top of the unified system RAM.
+     */
+
     PROVIDE(_stack_top = ORIGIN(RAM) + LENGTH(RAM));
+
+
+    /*
+     * ------------------------------------------------------------------------
+     * FIRMWARE IMAGE BOUNDARY
+     * ------------------------------------------------------------------------
+     *
+     * Marks the end of the linked firmware image and can be used by build
+     * tools or future bootloader implementations.
+     */
+
+    PROVIDE(_firmware_end = .);
 }
