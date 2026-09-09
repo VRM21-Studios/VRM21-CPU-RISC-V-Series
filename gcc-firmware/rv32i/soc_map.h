@@ -5,11 +5,42 @@
 
 
 // ============================================================================
-// VRM RV32I SoC - Memory-Mapped Peripheral Definitions
+// VRM RV32I SoC Memory Map
+// ----------------------------------------------------------------------------
+// Address-space organization:
 //
-// Tier 1 contains system-level peripherals shared by the CPU and accelerator
-// subsystem. Application-specific accelerators can be added in Tier 2.
+//   Tier 0 : System memory
+//            - Boot ROM
+//            - System RAM
+//
+//   Tier 1 : System core peripherals
+//            - Hardware timer
+//            - Interrupt arbiter
+//
+//   Tier 2 : Application-specific accelerators
 // ============================================================================
+
+
+// ============================================================================
+// TIER 0: SYSTEM MEMORY
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// BOOT ROM
+// ----------------------------------------------------------------------------
+
+#define ROM_BASE        0x00000000UL
+#define ROM_SIZE        0x00001000UL
+#define ROM_END         (ROM_BASE + ROM_SIZE)
+
+
+// ----------------------------------------------------------------------------
+// SYSTEM RAM
+// ----------------------------------------------------------------------------
+
+#define RAM_BASE        0x10000000UL
+#define RAM_SIZE        0x00010000UL
+#define RAM_END         (RAM_BASE + RAM_SIZE)
 
 
 // ============================================================================
@@ -17,18 +48,19 @@
 // ============================================================================
 
 // ----------------------------------------------------------------------------
-// 1. HARDWARE TIMER
+// HARDWARE TIMER
+// ----------------------------------------------------------------------------
 //
-// Base address : 0x00001000
+// Base address : 0x40000000
 //
 // Register map:
-//   +0x00 : Control
+//   +0x00 : Control register
 //   +0x04 : Compare value
 //   +0x08 : Counter value
 //   +0x0C : Interrupt status
 // ----------------------------------------------------------------------------
 
-#define TIMER_BASE      0x00001000UL
+#define TIMER_BASE      0x40000000UL
 
 #define TIMER_CTRL      (*(volatile uint32_t *)(TIMER_BASE + 0x00UL))
 #define TIMER_COMPARE   (*(volatile uint32_t *)(TIMER_BASE + 0x04UL))
@@ -36,18 +68,19 @@
 #define TIMER_STATUS    (*(volatile uint32_t *)(TIMER_BASE + 0x0CUL))
 
 
-// ============================================================================
-// 2. INTERRUPT ARBITER
+// ----------------------------------------------------------------------------
+// INTERRUPT ARBITER
+// ----------------------------------------------------------------------------
 //
-// Base address : 0x00002000
+// Base address : 0x40001000
 //
 // Register map:
-//   +0x00 : Pending interrupt bits
-//   +0x04 : Interrupt enable mask
-//   +0x08 : Interrupt clear register (W1C)
+//   +0x00 : Pending interrupt register
+//   +0x04 : Interrupt enable register
+//   +0x08 : Interrupt clear register
 // ----------------------------------------------------------------------------
 
-#define IRQ_BASE        0x00002000UL
+#define IRQ_BASE        0x40001000UL
 
 #define IRQ_PENDING     (*(volatile uint32_t *)(IRQ_BASE + 0x00UL))
 #define IRQ_ENABLE      (*(volatile uint32_t *)(IRQ_BASE + 0x04UL))
@@ -56,10 +89,30 @@
 
 // ============================================================================
 // TIER 2: APPLICATION ACCELERATORS
+// ----------------------------------------------------------------------------
+// Reserved for future application-specific peripherals.
 //
-// Reserved for DSP, NPU, audio-processing, and other application-specific
-// peripherals.
+// Possible applications include:
+//   - DSP accelerators
+//   - Audio processing hardware
+//   - NPU / AI accelerators
+//   - Custom memory-mapped peripherals
 // ============================================================================
+
+
+// ----------------------------------------------------------------------------
+// DSP ACCELERATOR TEMPLATE
+// ----------------------------------------------------------------------------
+//
+// Example placeholder:
+//
+// #define DSP_BASE       0x80000000UL
+// #define DSP_SIZE       0x00000100UL
+// #define DSP_END        (DSP_BASE + DSP_SIZE)
+//
+// Register definitions should be added when a specific DSP accelerator is
+// integrated into the system.
+// ----------------------------------------------------------------------------
 
 
 #endif /* SOC_MAP_H */
