@@ -1,81 +1,72 @@
 #include "soc_map.h"
 
-
 // ============================================================================
-// DEBUG / SIMULATION CONTROL
+// MACHINE-MODE TIMER INTERRUPT SERVICE ROUTINE
 // ============================================================================
 //
-// EBREAK is used as a software breakpoint for simulation and debugging.
+// The compiler's machine-mode interrupt calling convention is requested
+// through the interrupt attribute.
 //
-// The instruction itself does not replace the hardware WFI mechanism.
-// Its behavior depends on the exception/debug handling implemented by the
-// processor and the surrounding test environment.
+// The timer interrupt is acknowledged by clearing TIMER_STATUS. After the
+// interrupt service routine returns, program execution continues normally.
 // ============================================================================
 
-#define SIGNAL_DONE() \
-    asm volatile ("ebreak")
-
-
-/* ============================================================================
- * MACHINE-MODE TIMER INTERRUPT SERVICE ROUTINE
- * ============================================================================
- *
- * The compiler's machine-mode interrupt calling convention is requested
- * through the interrupt attribute.
- *
- * The timer interrupt is acknowledged by clearing TIMER_STATUS.
- * ========================================================================== */
-
-void __attribute__((interrupt("machine"))) timer_isr(void)
+void **attribute**((interrupt("machine"))) timer_isr(void)
 {
-    // Clear the timer interrupt-pending flag.
-    TIMER_STATUS = 0;
+// Clear the timer interrupt-pending flag.
+TIMER_STATUS = 0;
 }
 
+// ============================================================================
+// CPU / SYSTEM INITIALIZATION
+// ============================================================================
+//
+// Initialize the basic system state before entering the main firmware loop.
+//
+// The timer and all interrupt sources are disabled initially. Pending interrupt
+// sources are cleared to provide a deterministic startup state.
+// ============================================================================
 
-/* ============================================================================
- * CPU / SYSTEM INITIALIZATION
- * ============================================================================
- *
- * Disable system-generated interrupts before starting the main application.
- * This provides a deterministic initial state for firmware-level tests.
- * ========================================================================== */
-
-void init_vrm_cpu_pipeline(void)
+void init_vrm_system(void)
 {
-    // Disable the hardware timer.
-    TIMER_CTRL = 0;
+// Disable the hardware timer.
+TIMER_CTRL = 0;
 
-    // Disable all interrupt sources in the interrupt arbiter.
-    IRQ_ENABLE = 0;
+```
+// Disable all interrupt sources in the interrupt arbiter.
+IRQ_ENABLE = 0;
 
-    // Clear all pending interrupt sources.
-    IRQ_CLEAR = 0xFFFFFFFFUL;
+// Clear all pending interrupt sources.
+IRQ_CLEAR = 0xFFFFFFFFUL;
+```
 
-    // Signal that system initialization has completed.
-    SIGNAL_DONE();
 }
 
-
-/* ============================================================================
- * APPLICATION ENTRY POINT
- * ============================================================================
- */
+// ============================================================================
+// APPLICATION ENTRY POINT
+// ============================================================================
+//
+// The hardware bootloader transfers this firmware image into system memory
+// before releasing the CPU.
+//
+// After system initialization, the processor enters the WFI state and remains
+// available for interrupt-driven operation.
+// ============================================================================
 
 int main(void)
 {
-    // Initialize the CPU-side system and peripheral state.
-    init_vrm_cpu_pipeline();
+// Initialize the CPU-side system and peripheral state.
+init_vrm_system();
 
-    // Signal completion of firmware initialization to the simulation/debug
-    // environment.
-    SIGNAL_DONE();
+```
+// Main interrupt-driven execution loop.
+while (1)
+{
+    // Enter the low-activity wait state until an interrupt occurs.
+    asm volatile ("wfi");
+}
 
-    // Keep the processor alive if the application returns unexpectedly.
-    while (1)
-    {
-        asm volatile ("nop");
-    }
+return 0;
+```
 
-    return 0;
 }
