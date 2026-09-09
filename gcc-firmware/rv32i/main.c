@@ -32,13 +32,13 @@ void init_vrm_system(void)
 // Disable the hardware timer.
 TIMER_CTRL = 0;
 
-```
+
 // Disable all interrupt sources in the interrupt arbiter.
 IRQ_ENABLE = 0;
 
 // Clear all pending interrupt sources.
 IRQ_CLEAR = 0xFFFFFFFFUL;
-```
+
 
 }
 
@@ -58,7 +58,7 @@ int main(void)
 // Initialize the CPU-side system and peripheral state.
 init_vrm_system();
 
-```
+
 // Main interrupt-driven execution loop.
 while (1)
 {
@@ -67,6 +67,6 @@ while (1)
 }
 
 return 0;
-```
+
 
 }
