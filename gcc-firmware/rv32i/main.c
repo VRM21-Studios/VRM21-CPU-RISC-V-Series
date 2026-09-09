@@ -11,7 +11,7 @@
 // interrupt service routine returns, program execution continues normally.
 // ============================================================================
 
-void **attribute**((interrupt("machine"))) timer_isr(void)
+void __attribute__((interrupt("machine"))) timer_isr(void)
 {
 // Clear the timer interrupt-pending flag.
 TIMER_STATUS = 0;
