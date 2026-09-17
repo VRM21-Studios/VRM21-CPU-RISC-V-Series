@@ -106,9 +106,10 @@ module tb_vrm_cpu_wrapper();
     // The wrapper routes addresses outside the internal peripheral regions
     // to this external memory interface.
     always @(*) begin
-        if ((ext_mem_addr >= 32'h0000_0000) &&
-            (ext_mem_addr <  32'h0000_1000))
-            ext_mem_rdata = ext_dmem[ext_mem_addr[31:2]];
+        // Update: System RAM sekarang di 0x1000_0000 sampe 0x1001_0000
+        if ((ext_mem_addr >= 32'h1000_0000) &&
+            (ext_mem_addr <  32'h1001_0000))
+            ext_mem_rdata = ext_dmem[ext_mem_addr[7:2]];
         else
             ext_mem_rdata = 32'h00000000;
     end
@@ -116,9 +117,9 @@ module tb_vrm_cpu_wrapper();
     // Synchronous external memory write.
     always @(posedge clk) begin
         if (ext_mem_we &&
-            (ext_mem_addr >= 32'h0000_0000) &&
-            (ext_mem_addr <  32'h0000_1000)) begin
-            ext_dmem[ext_mem_addr[31:2]] <= ext_mem_wdata;
+            (ext_mem_addr >= 32'h1000_0000) &&
+            (ext_mem_addr <  32'h1001_0000)) begin
+            ext_dmem[ext_mem_addr[7:2]] <= ext_mem_wdata;
         end
     end
 
@@ -221,8 +222,8 @@ module tb_vrm_cpu_wrapper();
         // =====================================================================
 
         // PC = 0
-        // Jump to the main program at PC = 36.
-        imem[0] = asm_j(0, 36);
+        // Jump to the main program at PC = 40.
+        imem[0] = asm_j(0, 40);
 
         // =====================================================================
         // 8.2 INTERRUPT SERVICE ROUTINE
@@ -240,7 +241,7 @@ module tb_vrm_cpu_wrapper();
         imem[1] = asm_u(
             7'h37,
             1,
-            32'h00001
+            32'h40000
         );
 
         // ADDI x3, x0, 1
@@ -268,7 +269,7 @@ module tb_vrm_cpu_wrapper();
         imem[4] = asm_u(
             7'h37,
             2,
-            32'h00002
+            32'h40001
         );
 
         // SW x3, 8(x2)
