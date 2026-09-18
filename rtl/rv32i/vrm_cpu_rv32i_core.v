@@ -94,7 +94,7 @@ module vrm_cpu_rv32i_core (
     reg [31:0] mepc;
 
     // Accept an interrupt only when the processor is not already in an ISR.
-    wire irq_trigger = (irq === 1'b1) && !in_isr;
+    wire irq_trigger = (irq == 1'b1) && !in_isr;
 
     // =========================================================================
     // 1. INSTRUCTION FETCH (IF)
