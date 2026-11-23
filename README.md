@@ -6,6 +6,8 @@ This repository focuses on the development of custom RISC-V CPU cores, their sur
 
 The repository currently contains an **RV32I CPU subsystem** together with supporting interrupt, timer, memory-mapped I/O, firmware, and verification infrastructure.
 
+It also contains the **RV32IM + FreeRTOS variant** (`rv32im_freertos`): an RV32IM core with machine-mode traps, a stereo audio filter (VCF) on an AXI4-Stream path, and a FreeRTOS firmware that boots automatically on a Kria KR260.
+
 ---
 
 ## Motivation
@@ -39,6 +41,7 @@ The primary objective of the project is therefore educational: to develop a deep
 | RV32I Firmware                | Available         |
 | RV32I Simulation Verification | Available         |
 | RV32I FPGA Verification       | Verified          |
+| RV32IM + FreeRTOS Variant     | FPGA-validated    |
 | VRM Synthesizer Series        | Under Development |
 
 > **FPGA Verification Note:** The RV32I implementation has been verified on FPGA as part of a system-level hardware integration. The specific application-level design used during FPGA validation is not included in this repository because its associated research work is currently unpublished.
@@ -55,33 +58,59 @@ The repository is organized by CPU architecture:
 VRM21-CPU-RISC-V-Series
 │
 ├── rtl/
-│   └── rv32i/
-│       ├── vrm_cpu_rv32i_core.v
-│       ├── vrm_cpu_rv32i_wrapper.v
-│       ├── vrm_irq_arbiter.v
-│       ├── vrm_timer.v
+│   ├── rv32i/
+│   │   ├── vrm_cpu_rv32i_core.v
+│   │   ├── vrm_cpu_rv32i_wrapper.v
+│   │   ├── vrm_irq_arbiter.v
+│   │   ├── vrm_timer.v
+│   │   └── ...
+│   └── rv32im_freertos/
+│       ├── vrm_cpu_rv32im_core.v
+│       ├── vrm_mdu.v
+│       ├── vrm_soc_axi.v
 │       └── ...
 │
 ├── tb/
-│   └── rv32i/
-│       ├── tb_vrm_cpu_rv32i_core.sv
-│       ├── tb_vrm_cpu_wrapper.sv
+│   ├── rv32i/
+│   │   ├── tb_vrm_cpu_rv32i_core.sv
+│   │   ├── tb_vrm_cpu_wrapper.sv
+│   │   └── ...
+│   └── rv32im_freertos/
+│       ├── tb_freertos_autoboot.sv
+│       ├── tb_rv32im_regression.sv
 │       └── ...
 │
 ├── include/
-│   └── rv32i/
-│       └── vrm_soc_map_rv32i.vh
+│   ├── rv32i/
+│   │   └── vrm_soc_map_rv32i.vh
+│   └── rv32im_freertos/
+│       ├── vrm_soc_map_rv32i.vh
+│       └── firmware.mem
 │
 ├── gcc-firmware/
-│   └── rv32i/
-│       ├── boot.S
+│   ├── rv32i/
+│   │   ├── boot.S
+│   │   ├── main.c
+│   │   ├── soc_map.h
+│   │   ├── link.ld
+│   │   └── build.sh
+│   └── rv32im_freertos/
 │       ├── main.c
-│       ├── soc_map.h
-│       ├── link.ld
-│       └── build.sh
+│       ├── port_vrm.c
+│       ├── Makefile
+│       ├── FreeRTOS-Kernel/   (git submodule)
+│       └── ...
+│
+├── scripts/
+│   └── rv32im_freertos/
+│       ├── run_sim.ps1
+│       ├── vrm_rv32im_freertos_bd.tcl
+│       └── ...
 │
 ├── docs/
-│   └── rv32i/
+│   ├── rv32i/
+│   │   └── ...
+│   └── rv32im_freertos/
 │       └── ...
 │
 └── README.md
@@ -386,6 +415,20 @@ The application-level FPGA design used for validation is not included because it
 
 ---
 
+# RV32IM + FreeRTOS Variant
+
+The `rv32im_freertos` variant extends the RV32I baseline into a small real-time audio SoC. The core adds the M extension and machine-mode traps for illegal instructions, ECALL, and EBREAK, which a preemptive kernel needs. The SoC places a 64 KiB unified RAM, the timer, the interrupt arbiter, and a stereo state-variable filter behind one AXI4-Lite slave and one AXI4-Stream audio path. A hardware bootloader copies the FreeRTOS image into RAM at reset and starts the CPU without help from the host, and GPIO interrupts let the firmware switch filter presets while audio streams through.
+
+* RTL: `rtl/rv32im_freertos/` (top `vrm_soc_axi`), memory map and boot image in `include/rv32im_freertos/`
+* Simulation: `pwsh scripts/rv32im_freertos/run_sim.ps1` runs every testbench in the Vivado simulator and exits non-zero on failure
+* Firmware: `gcc-firmware/rv32im_freertos/` (FreeRTOS V11.1.0 as a git submodule; run `git submodule update --init` before building)
+* Block design: `scripts/rv32im_freertos/vrm_rv32im_freertos_bd.tcl` for the Kria KR260 (AXI DMA, AXI GPIO, 100 MHz)
+* Documentation and validation results: `docs/rv32im_freertos/`
+
+The variant was simulated in the Vivado simulator, Icarus Verilog, and Verilator, implemented at 100 MHz on the Kria KR260 (WNS +0.644 ns), and run on the board with FreeRTOS, DMA audio, and all six filter presets. No bitstream is distributed; it is built from the sources with the block-design script.
+
+---
+
 # VRM Synthesizer Series
 
 The RV32I memory map and firmware environment intentionally contain an early placeholder for the future **VRM Synthesizer Series**.
@@ -416,10 +459,11 @@ Verification is organized according to CPU architecture.
 
 ```text
 tb/
-└── rv32i/
+├── rv32i/
+└── rv32im_freertos/
 ```
 
-The RV32I verification environment covers the CPU core and SoC-level integration.
+The RV32I verification environment covers the CPU core and SoC-level integration. The RV32IM + FreeRTOS environment is described in `docs/rv32im_freertos/06_validation.md`.
 
 Verification includes:
 
@@ -446,7 +490,8 @@ Architecture-specific documentation is maintained under:
 
 ```text
 docs/
-└── rv32i/
+├── rv32i/
+└── rv32im_freertos/
 ```
 
 Documentation is intended to describe the architecture independently from the RTL implementation.
@@ -515,7 +560,7 @@ The CPU architecture is intended to provide a programmable platform for integrat
 
 # Current Development Scope
 
-The current development scope is centered on the **RV32I processor architecture**.
+The current development scope is centered on the **RV32I processor architecture** and its first extended variant, **RV32IM + FreeRTOS**.
 
 The RV32I implementation represents the mature baseline of the series and has completed FPGA validation.
 
@@ -552,11 +597,24 @@ The architecture-specific repository structure is intended to accommodate these 
 
 ---
 
+# Credits
+
+* **RISC-V** — The cores implement the RISC-V instruction set and privileged architecture as specified by [RISC-V International](https://riscv.org/technical/specifications/) (specifications licensed under CC BY 4.0). RISC-V is a registered trademark of RISC-V International. The cores in this repository are independent implementations and are not certified by or affiliated with RISC-V International.
+* **FreeRTOS** — The `rv32im_freertos` firmware uses the [FreeRTOS Kernel](https://github.com/FreeRTOS/FreeRTOS-Kernel) V11.1.0, Copyright Amazon.com, Inc. or its affiliates, included unmodified as a git submodule under its own MIT License. It is not covered by the license of this repository. FreeRTOS is a trademark of Amazon Web Services, Inc.
+* **Design references** — lowRISC Ibex (Apache-2.0), SERV by Olof Kindgren (ISC), and PicoRV32 by Claire Xenia Wolf (ISC) were used as design references for the CSR and interrupt logic of the `rv32im_freertos` core; no source code from these projects is included. The filter follows the state-variable filter described by H. Chamberlin in *Musical Applications of Microprocessors*.
+* **AMD tools and IP** — The block-design script instantiates AMD Vivado IP (Zynq UltraScale+ MPSoC, AXI DMA, AXI GPIO, SmartConnect, Processor System Reset), which is not included and is subject to the license of the user's Vivado installation. Kria, Vivado, and Zynq are trademarks of AMD.
+
+See `docs/rv32im_freertos/README.md` for the detailed credits of the variant.
+
+---
+
 # License
 
 Licensed under the MIT License.
 
 Provided as-is, without warranty.
+
+The MIT License covers the original files of this repository. Third-party material listed under Credits keeps its own license. No bitstream is distributed; a bitstream built from these sources also contains AMD IP subject to AMD's terms.
 
 ---
 
