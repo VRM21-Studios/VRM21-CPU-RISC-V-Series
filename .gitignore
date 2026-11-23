@@ -39,3 +39,16 @@ Release/
 Thumbs.db
 .vscode/
 *.swp
+
+# ============================================================
+# Build outputs and local settings
+# ============================================================
+build/
+scripts/*/local_paths.ps1
+scripts/*/local_settings.tcl
+
+# Firmware build outputs (the tracked boot image is include/*/firmware.mem)
+gcc-firmware/rv32im_freertos/*.elf
+gcc-firmware/rv32im_freertos/*.bin
+gcc-firmware/rv32im_freertos/*.map
+gcc-firmware/rv32im_freertos/*.mem
