@@ -187,43 +187,41 @@ Current system map:
 
 | Address Range               |  Size | Device                          |
 | --------------------------- | ----: | ------------------------------- |
-| `0x0000_0000 – 0x0000_0FFF` |  4 KB | System RAM                      |
-| `0x0000_1000 – 0x0000_10FF` | 256 B | Hardware Timer                  |
-| `0x0000_2000 – 0x0000_20FF` | 256 B | Interrupt Arbiter               |
-| `>= 0x0000_2100`            |     — | Application / Accelerator Space |
+| `0x0000_0000 – 0x0000_0FFF` |  4 KB | Boot ROM                        |
+| `0x1000_0000 – 0x1000_FFFF` | 64 KB | System RAM                      |
+| `0x4000_0000 – 0x4000_00FF` | 256 B | Hardware Timer                  |
+| `0x4000_1000 – 0x4000_10FF` | 256 B | Interrupt Arbiter               |
+| `>= 0x8000_0000`            |     — | Application / Accelerator Space |
 
 The memory map therefore separates processor memory from system-level control peripherals.
 
-### System RAM
+### Boot ROM and System RAM
 
-The current system RAM is:
-
-```text
-Base : 0x00000000
-Size : 4 KB
-End  : 0x00001000
-```
-
-It is used for:
-
-* Program code
-* Read-only data
-* Writable data
-* BSS
-* Stack
-
-The current stack top is:
+The CPU starts at the boot ROM base `0x0000_0000`. The system RAM is:
 
 ```text
-0x00001000
+Base : 0x1000_0000
+Size : 64 KB
+End  : 0x1001_0000
 ```
+
+The firmware linker script links code, read-only data, writable data, BSS,
+and the stack as one 64 KB image starting at `0x0000_0000`, with the stack
+top at:
+
+```text
+0x0001_0000
+```
+
+The integrating SoC must provide memory over that range; see
+[`03_memory_map.md`](03_memory_map.md) for details.
 
 ### Hardware Timer
 
 The timer is mapped at:
 
 ```text
-0x00001000
+0x40000000
 ```
 
 with registers:
@@ -240,7 +238,7 @@ with registers:
 The interrupt arbiter is mapped at:
 
 ```text
-0x00002000
+0x40001000
 ```
 
 with:
@@ -251,7 +249,7 @@ with:
 0x08  CLEAR
 ```
 
-The remaining address space is intentionally available for future application-specific hardware and accelerators.
+The address space from `0x8000_0000` is intentionally available for future application-specific hardware and accelerators.
 
 ---
 
@@ -539,8 +537,9 @@ A simplified system-level architecture is:
                          +----------------+----------------+
                          |                |                |
                          v                v                v
-                    System RAM        Timer         IRQ Arbiter
-                    0x0000_0000       0x1000          0x2000
+                   ROM / RAM          Timer         IRQ Arbiter
+              0x0000_0000 /     0x4000_0000     0x4000_1000
+              0x1000_0000
                                           |
                                           v
                                     CPU Interrupt
@@ -555,7 +554,6 @@ This provides a straightforward path for integrating future VRM21 hardware block
 * DWT cores
 * FIFO controllers
 * RAM controllers
-* Audio-processing hardware
 * Custom FPGA peripherals
 
 ---
@@ -668,16 +666,11 @@ The RV32I core is the 32-bit processor member of the **VRM21-CPU-RISC-V-Series**
 
 It provides the baseline integer processor architecture on which more capable processor variants can be developed.
 
-The repository also contains the RV64IMFD processor, which extends the architectural scope into:
+The repository also contains the `rv32im_freertos` variant, which extends the
+architectural scope with the M extension, machine-mode traps, and a FreeRTOS
+firmware (see `docs/rv32im_freertos/`).
 
-```text
-RV64I
-+ M
-+ F
-+ D
-```
-
-The two cores are therefore intended to form related members of the same processor-development series rather than identical implementations.
+The variants are therefore intended to form related members of the same processor-development series rather than identical implementations.
 
 ---
 

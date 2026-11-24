@@ -94,7 +94,6 @@
 //
 // Possible applications include:
 //   - DSP accelerators
-//   - Audio processing hardware
 //   - NPU / AI accelerators
 //   - Custom memory-mapped peripherals
 // ============================================================================

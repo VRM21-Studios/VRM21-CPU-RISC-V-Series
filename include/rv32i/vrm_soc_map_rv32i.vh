@@ -15,7 +15,7 @@
 //            - Interrupt arbiter
 //
 //   Tier 2 : Application-specific accelerators
-//            - Reserved for DSP, NPU, audio, and other peripherals
+//            - Reserved for DSP, NPU, and other peripherals
 // ============================================================================
 
 
@@ -127,7 +127,6 @@
 //
 // Future examples:
 //   - DSP accelerators
-//   - Audio processing modules
 //   - NPU / AI accelerators
 //   - Custom hardware peripherals
 //

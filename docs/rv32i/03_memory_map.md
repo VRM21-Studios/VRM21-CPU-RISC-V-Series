@@ -4,23 +4,22 @@
 
 The VRM RV32I SoC uses a simple memory-mapped architecture.
 
-The processor's data address space is divided into:
+The address space is divided into:
 
-1. System RAM
-2. Hardware Timer
-3. Interrupt Arbiter
-4. Application and accelerator space
+1. Tier 0: system memory (boot ROM and system RAM)
+2. Tier 1: system core peripherals (hardware timer and interrupt arbiter)
+3. Tier 2: application-specific accelerator space
 
 The current system map is defined in:
 
 ```text
-vrm_soc_map_rv32i.vh
+include/rv32i/vrm_soc_map_rv32i.vh
 ```
 
 The software-visible version is:
 
 ```text
-soc_map.h
+gcc-firmware/rv32i/soc_map.h
 ```
 
 Both definitions are intended to remain synchronized.
@@ -29,55 +28,56 @@ Both definitions are intended to remain synchronized.
 
 ## 2. Address Map
 
-| Address Range               |  Size | Device                          | Access          |
-| --------------------------- | ----: | ------------------------------- | --------------- |
-| `0x0000_0000 - 0x0000_0FFF` |  4 KB | System RAM                      | R/W             |
-| `0x0000_1000 - 0x0000_10FF` | 256 B | Hardware Timer                  | MMIO            |
-| `0x0000_2000 - 0x0000_20FF` | 256 B | Interrupt Arbiter               | MMIO            |
-| Above `0x0000_2100`         |     — | Application / Accelerator Space | Project-defined |
+| Address Range               |  Size | Tier | Device                          | Access          |
+| --------------------------- | ----: | ---- | ------------------------------- | --------------- |
+| `0x0000_0000 - 0x0000_0FFF` |  4 KB | 0    | Boot ROM                        | R (boot image)  |
+| `0x1000_0000 - 0x1000_FFFF` | 64 KB | 0    | System RAM                      | R/W             |
+| `0x4000_0000 - 0x4000_00FF` | 256 B | 1    | Hardware Timer                  | MMIO            |
+| `0x4000_1000 - 0x4000_10FF` | 256 B | 1    | Interrupt Arbiter               | MMIO            |
+| From `0x8000_0000`          |     — | 2    | Application / Accelerator Space | Project-defined |
+
+The CPU wrapper decodes only the timer and interrupt-arbiter windows. Every
+other address is forwarded to the external memory interface, where the
+integrating SoC places the boot ROM, the system RAM, and any accelerator.
 
 ---
 
-## 3. System RAM
+## 3. Boot ROM and System RAM
 
-Base address:
-
-```text
-0x0000_0000
-```
-
-Size:
+Boot ROM:
 
 ```text
-4 KB
+Base : 0x0000_0000
+Size : 4 KB
 ```
 
-End address:
+The CPU starts at `0x0000_0000` after reset and takes machine-mode interrupts
+at `0x0000_0004`, so the boot image must provide both vectors at the start of
+this window.
+
+System RAM:
 
 ```text
-0x0000_1000
+Base : 0x1000_0000
+Size : 64 KB
+End  : 0x1001_0000
 ```
 
-The RAM is used for:
-
-* Program code
-* Read-only data
-* Writable data
-* BSS
-* Stack
-
-The linker script therefore defines:
+The firmware linker script (`gcc-firmware/rv32i/link.ld`) links the complete
+firmware image from address `0x0000_0000`:
 
 ```text
 RAM ORIGIN = 0x00000000
-RAM LENGTH = 0x1000
+RAM LENGTH = 0x00010000
+_stack_top = ORIGIN(RAM) + LENGTH(RAM) = 0x0001_0000
 ```
 
-The initial stack pointer is placed at:
-
-```text
-0x0000_1000
-```
+NOTE: the linked image and its stack therefore occupy `0x0000_0000` to
+`0x0000_FFFF`. The integrating SoC must provide memory over this range, for
+example by mapping the 64 KB system RAM array behind both windows. An
+integration that only maps the 4 KB boot ROM window at `0x0000_0000` must
+reduce `LENGTH` in the linker script so that the stack stays inside that
+window.
 
 ---
 
@@ -86,17 +86,17 @@ The initial stack pointer is placed at:
 Base address:
 
 ```text
-0x0000_1000
+0x4000_0000
 ```
 
 Register layout:
 
-| Offset | Register | Access | Description      |
-| -----: | -------- | ------ | ---------------- |
-| `0x00` | CTRL     | R/W    | Timer control    |
-| `0x04` | COMPARE  | R/W    | Compare value    |
-| `0x08` | COUNTER  | R/W    | Current counter  |
-| `0x0C` | STATUS   | R/W1C  | Interrupt status |
+| Offset | Address       | Register | Access | Description      |
+| -----: | ------------- | -------- | ------ | ---------------- |
+| `0x00` | `0x4000_0000` | CTRL     | R/W    | Timer control    |
+| `0x04` | `0x4000_0004` | COMPARE  | R/W    | Compare value    |
+| `0x08` | `0x4000_0008` | COUNTER  | R/W    | Current counter  |
+| `0x0C` | `0x4000_000C` | STATUS   | R/W1C  | Interrupt status |
 
 ---
 
@@ -105,7 +105,7 @@ Register layout:
 Address:
 
 ```text
-0x0000_1000
+0x4000_0000
 ```
 
 Bit definitions:
@@ -130,7 +130,7 @@ CTRL[2] && STATUS[0]
 Address:
 
 ```text
-0x0000_1004
+0x4000_0004
 ```
 
 The compare register determines when the timer reaches its interrupt condition.
@@ -158,7 +158,7 @@ If auto-reload is enabled, the counter is reset to zero.
 Address:
 
 ```text
-0x0000_1008
+0x4000_0008
 ```
 
 This register contains the current timer count.
@@ -172,7 +172,7 @@ Software may write to this register to manually change or reset the counter.
 Address:
 
 ```text
-0x0000_100C
+0x4000_000C
 ```
 
 Current status bits:
@@ -199,7 +199,7 @@ clears the pending interrupt flag.
 Base address:
 
 ```text
-0x0000_2000
+0x4000_1000
 ```
 
 The interrupt arbiter collects multiple interrupt sources and provides a single interrupt signal to the CPU.
@@ -213,11 +213,11 @@ irq_src[31:1] = External / Future Sources
 
 Register layout:
 
-| Offset | Register | Access | Description               |
-| -----: | -------- | ------ | ------------------------- |
-| `0x00` | PENDING  | R/W1C  | Pending interrupt sources |
-| `0x04` | ENABLE   | R/W    | Interrupt enable mask     |
-| `0x08` | CLEAR    | W1C    | Interrupt acknowledge     |
+| Offset | Address       | Register | Access | Description               |
+| -----: | ------------- | -------- | ------ | ------------------------- |
+| `0x00` | `0x4000_1000` | PENDING  | R      | Pending interrupt sources |
+| `0x04` | `0x4000_1004` | ENABLE   | R/W    | Interrupt enable mask     |
+| `0x08` | `0x4000_1008` | CLEAR    | W1C    | Interrupt acknowledge     |
 
 ---
 
@@ -226,7 +226,7 @@ Register layout:
 Address:
 
 ```text
-0x0000_2000
+0x4000_1000
 ```
 
 The arbiter detects rising edges from the interrupt sources.
@@ -239,7 +239,8 @@ A source transition:
 
 sets the corresponding pending bit.
 
-Once set, the pending bit remains asserted until software clears it.
+Once set, the pending bit remains asserted until software clears it through
+the CLEAR register.
 
 ---
 
@@ -248,7 +249,7 @@ Once set, the pending bit remains asserted until software clears it.
 Address:
 
 ```text
-0x0000_2004
+0x4000_1004
 ```
 
 Each bit controls whether the corresponding pending interrupt source can reach the CPU.
@@ -272,7 +273,7 @@ cpu_irq_trigger = |(pending & enable)
 Address:
 
 ```text
-0x0000_2008
+0x4000_1008
 ```
 
 The clear register uses Write-One-to-Clear semantics.
@@ -359,13 +360,13 @@ The wrapper determines peripheral selection using address ranges.
 Timer:
 
 ```text
-TIMER_BASE_ADDR <= address < TIMER_END_ADDR
+TIMER_BASE_ADDR <= address < TIMER_END_ADDR      (0x4000_0000 .. 0x4000_00FF)
 ```
 
 Interrupt arbiter:
 
 ```text
-IRQ_BASE_ADDR <= address < IRQ_END_ADDR
+IRQ_BASE_ADDR <= address < IRQ_END_ADDR          (0x4000_1000 .. 0x4000_10FF)
 ```
 
 All other addresses are routed externally.
@@ -377,16 +378,16 @@ All other addresses are routed externally.
 The software header provides equivalent definitions:
 
 ```c
-#define TIMER_BASE      0x00001000
-#define TIMER_CTRL      (*(volatile uint32_t*)(TIMER_BASE + 0x00))
-#define TIMER_COMPARE   (*(volatile uint32_t*)(TIMER_BASE + 0x04))
-#define TIMER_COUNTER   (*(volatile uint32_t*)(TIMER_BASE + 0x08))
-#define TIMER_STATUS    (*(volatile uint32_t*)(TIMER_BASE + 0x0C))
+#define TIMER_BASE      0x40000000UL
+#define TIMER_CTRL      (*(volatile uint32_t *)(TIMER_BASE + 0x00UL))
+#define TIMER_COMPARE   (*(volatile uint32_t *)(TIMER_BASE + 0x04UL))
+#define TIMER_COUNTER   (*(volatile uint32_t *)(TIMER_BASE + 0x08UL))
+#define TIMER_STATUS    (*(volatile uint32_t *)(TIMER_BASE + 0x0CUL))
 
-#define IRQ_BASE        0x00002000
-#define IRQ_PENDING     (*(volatile uint32_t*)(IRQ_BASE + 0x00))
-#define IRQ_ENABLE      (*(volatile uint32_t*)(IRQ_BASE + 0x04))
-#define IRQ_CLEAR       (*(volatile uint32_t*)(IRQ_BASE + 0x08))
+#define IRQ_BASE        0x40001000UL
+#define IRQ_PENDING     (*(volatile uint32_t *)(IRQ_BASE + 0x00UL))
+#define IRQ_ENABLE      (*(volatile uint32_t *)(IRQ_BASE + 0x04UL))
+#define IRQ_CLEAR       (*(volatile uint32_t *)(IRQ_BASE + 0x08UL))
 ```
 
 The registers are declared `volatile` because they represent hardware state rather than ordinary memory.
@@ -395,12 +396,12 @@ The registers are declared `volatile` because they represent hardware state rath
 
 ## 17. Future Expansion
 
-The memory map reserves higher address space for application-specific hardware.
+The memory map reserves the Tier 2 address space, starting at `0x8000_0000`,
+for application-specific hardware.
 
 Potential devices include:
 
 * DSP cores
-* Audio processing blocks
 * FIFO controllers
 * RAM controllers
 * FFT accelerators
@@ -408,4 +409,6 @@ Potential devices include:
 * NPU interfaces
 * AXI-connected application peripherals
 
-The current architecture intentionally leaves these regions open for future SoC expansion.
+New accelerator windows are added to the Tier 2 section of both
+`vrm_soc_map_rv32i.vh` and `soc_map.h` without changing the Tier 0 or Tier 1
+map.

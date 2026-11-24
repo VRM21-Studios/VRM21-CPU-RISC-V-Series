@@ -42,11 +42,8 @@ The primary objective of the project is therefore educational: to develop a deep
 | RV32I Simulation Verification | Available         |
 | RV32I FPGA Verification       | Verified          |
 | RV32IM + FreeRTOS Variant     | FPGA-validated    |
-| VRM Synthesizer Series        | Under Development |
 
 > **FPGA Verification Note:** The RV32I implementation has been verified on FPGA as part of a system-level hardware integration. The specific application-level design used during FPGA validation is not included in this repository because its associated research work is currently unpublished.
-
-> **Synthesizer Development Note:** The memory map and firmware environment contain a reserved/example region for the planned VRM Synthesizer Series. The oscillator-related interface is currently used only as a placeholder for future SoC integration and firmware testbench development. The synthesizer/oscillator implementation is not considered a completed or FPGA-validated component.
 
 ---
 
@@ -93,7 +90,7 @@ VRM21-CPU-RISC-V-Series
 │   │   ├── main.c
 │   │   ├── soc_map.h
 │   │   ├── link.ld
-│   │   └── build.sh
+│   │   └── build_script.md
 │   └── rv32im_freertos/
 │       ├── main.c
 │       ├── port_vrm.c
@@ -231,14 +228,17 @@ The memory interface is designed to keep the processor core separated from the s
 
 # RV32I Memory Map
 
-The current RV32I system defines the following architectural regions:
+The current RV32I system defines the following architectural regions (`include/rv32i/vrm_soc_map_rv32i.vh`):
 
 | Address Range               | Region | Description                                |
 | --------------------------- | ------ | ------------------------------------------ |
-| `0x0000_0000 - 0x0000_00FF` | Tier 0 | Hardware Timer                             |
-| `0x0000_1000 - 0x0000_10FF` | Tier 0 | Interrupt Arbiter                          |
-| `0x0000_4000 - 0x0000_7FFF` | Tier 1 | Main Data Memory                           |
-| `0x4000_0000 - 0x4000_0FFF` | Tier 2 | Reserved Application / Accelerator  Region |
+| `0x0000_0000 - 0x0000_0FFF` | Tier 0 | Boot ROM (reset 0x0, interrupt 0x4)        |
+| `0x1000_0000 - 0x1000_FFFF` | Tier 0 | System RAM (64 KB)                         |
+| `0x4000_0000 - 0x4000_00FF` | Tier 1 | Hardware Timer                             |
+| `0x4000_1000 - 0x4000_10FF` | Tier 1 | Interrupt Arbiter                          |
+| From `0x8000_0000`          | Tier 2 | Reserved Application / Accelerator Region  |
+
+The CPU wrapper decodes the Tier 1 peripherals; all other addresses are forwarded to the external memory interface of the integrating SoC.
 
 The Tier 2 region is reserved for future application-specific hardware.
 
@@ -254,9 +254,6 @@ The architecture contains:
 
 ```text
 External IRQ Sources
-        │
-        ▼
-2-Stage Synchronizer
         │
         ▼
 Interrupt Arbiter
@@ -277,7 +274,7 @@ The interrupt arbiter maintains:
 * Interrupt clearing
 * Combined CPU interrupt trigger
 
-The external interrupt inputs are synchronized through a two-stage flip-flop structure before entering the interrupt arbiter.
+The arbiter samples its inputs on the CPU clock. External interrupt inputs that come from another clock domain or from asynchronous sources must be synchronized by the integrating SoC before they reach `ext_irq_in`.
 
 ---
 
@@ -341,7 +338,7 @@ gcc-firmware/
     ├── main.c
     ├── soc_map.h
     ├── link.ld
-    └── build.sh
+    └── build_script.md
 ```
 
 The firmware is intended primarily for:
@@ -429,30 +426,6 @@ The variant was simulated in the Vivado simulator, Icarus Verilog, and Verilator
 
 ---
 
-# VRM Synthesizer Series
-
-The RV32I memory map and firmware environment intentionally contain an early placeholder for the future **VRM Synthesizer Series**.
-
-The planned series is expected to include hardware such as:
-
-* Digital oscillators
-* Wavetable-based waveform generation
-* Sub-oscillator modes
-* LFO functionality
-* Noise generation
-* Glide / portamento control
-* Additional synthesizer-oriented DSP components
-
-The current repository only establishes the **SoC-level address-space and firmware interface concept**.
-
-The oscillator implementation itself remains under development.
-
-The synthesizer series has **not yet been independently validated on FPGA**, and any references to the reserved oscillator region are therefore intended for simulation or future integration use only.
-
-Future synthesizer components will be introduced as their individual implementations become sufficiently mature and independently verified.
-
----
-
 # Verification
 
 Verification is organized according to CPU architecture.
@@ -527,13 +500,11 @@ The processor is developed as part of a larger SoC architecture rather than as a
 The architecture is intended to support future integration with:
 
 * DSP accelerators
-* Audio processing blocks
 * NPU components
 * Memory controllers
 * Application-specific accelerators
 * Additional interrupt sources
 * Additional RISC-V processor variants
-* Synthesizer and audio-generation hardware
 
 ---
 
@@ -548,7 +519,6 @@ The surrounding VRM21 RTL ecosystem includes reusable hardware blocks such as:
 * DSP components
 * Memory cores
 * FIFO cores
-* Audio processing blocks
 * Arithmetic components
 * Processing accelerators
 * Utility RTL
@@ -574,8 +544,6 @@ Current priorities include:
 6. Developing additional FPGA validation platforms
 7. Integrating future application-specific hardware
 
-The planned VRM Synthesizer Series remains a separate development track and is currently represented only through reserved address-space and firmware placeholders.
-
 ---
 
 # Future Development
@@ -587,10 +555,8 @@ Future versions of the series may introduce:
 * More advanced interrupt architecture
 * Additional memory interfaces
 * DSP coprocessors
-* Audio accelerators
 * NPU integration
 * Custom SoC interconnects
-* VRM Synthesizer hardware
 * Additional FPGA validation platforms
 
 The architecture-specific repository structure is intended to accommodate these developments without requiring major restructuring.

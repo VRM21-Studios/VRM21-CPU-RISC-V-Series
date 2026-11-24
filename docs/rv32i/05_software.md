@@ -4,7 +4,7 @@
 
 The repository includes a bare-metal firmware flow for the RV32I processor.
 
-The firmware is compiled using a RISC-V GNU toolchain and linked directly into the processor's 4 KB system RAM.
+The firmware is compiled using a RISC-V GNU toolchain and linked as one 64 KB image starting at the boot address `0x0000_0000`.
 
 The software environment does not depend on an operating system or standard runtime.
 
@@ -119,14 +119,17 @@ For the current memory configuration:
 
 ```text
 RAM origin = 0x00000000
-RAM size   = 0x00001000
+RAM size   = 0x00010000
 ```
 
 therefore:
 
 ```text
-_stack_top = 0x00001000
+_stack_top = 0x00010000
 ```
+
+The integrating SoC must provide memory up to this address; see
+`03_memory_map.md`.
 
 The startup code initializes:
 
@@ -151,7 +154,7 @@ The memory definition is:
 ```text
 RAM (rwx) :
     ORIGIN = 0x00000000
-    LENGTH = 0x1000
+    LENGTH = 0x00010000
 ```
 
 The following sections are placed into system RAM:
@@ -163,7 +166,7 @@ The following sections are placed into system RAM:
 .bss
 ```
 
-This allows the generated firmware image to operate entirely within the 4 KB RAM region.
+This allows the generated firmware image to operate entirely within the 64 KB region linked at `0x0000_0000`.
 
 ---
 
@@ -525,7 +528,6 @@ The firmware infrastructure can later be extended with:
 * DSP accelerator drivers
 * FIFO drivers
 * RAM controller drivers
-* Audio processing control software
 * Bare-metal application examples
 * Startup/runtime support
 * More complete exception handling

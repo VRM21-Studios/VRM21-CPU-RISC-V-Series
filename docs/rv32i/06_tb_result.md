@@ -243,7 +243,7 @@ IRQ_BASE + 0x08
 which corresponds to:
 
 ```text
-0x00002008
+0x40001008
 ```
 
 The pending interrupt state must subsequently become zero.
